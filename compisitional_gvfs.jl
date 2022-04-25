@@ -29,6 +29,9 @@ using MinimalRLCore
 # ╔═╡ 917e3c4f-75c7-4759-81d5-a0c6823d784a
 using DSP
 
+# ╔═╡ a0c15db4-d43f-40ce-ab35-e7583b7c0dd4
+
+
 # ╔═╡ 729faad8-176f-4b6b-af97-3e321c7be3e0
 md"""
 - [Time As a Variable: Time-Series Analysis](https://www.oreilly.com/library/view/data-analysis-with/9781449389802/ch04.html)
@@ -475,6 +478,14 @@ end
 # ╔═╡ 611e00d5-cf92-4e0b-9504-8b611b88a897
 md"""
 ## Butterworth Filters
+"""
+
+# ╔═╡ 46c3ba82-c56e-4ee1-9fad-2523137ba84d
+md"""
+Some resources on time-series filters.
+
+- [Time As a Variable: Time-Series Analysis](https://www.oreilly.com/library/view/data-analysis-with/9781449389802/ch04.html)
+- [A Very Short Course on Time Series Analysis](https://bookdown.org/rdpeng/timeseriesbook/filtering-time-series.html)
 """
 
 # ╔═╡ 8850c353-20ba-4181-ac5a-70ca86e15066
@@ -1869,6 +1880,12 @@ git-tree-sha1 = "f6250b16881adf048549549fba48b1161acdac8c"
 uuid = "c1c5ebd0-6772-5130-a774-d5fcae4a789d"
 version = "3.100.1+0"
 
+[[deps.LERC_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "bf36f528eec6634efc60d7ec062008f171071434"
+uuid = "88015f11-f218-50d7-93a8-a6af411a945d"
+version = "3.0.0+1"
+
 [[deps.LZO_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "e5b909bcf985c5e2605737d2ce278ed791b89be6"
@@ -1952,10 +1969,10 @@ uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
 version = "2.35.0+0"
 
 [[deps.Libtiff_jll]]
-deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "Zlib_jll", "Zstd_jll"]
-git-tree-sha1 = "340e257aada13f95f98ee352d316c3bed37c8ab9"
+deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "Pkg", "Zlib_jll", "Zstd_jll"]
+git-tree-sha1 = "c9551dd26e31ab17b86cbd00c2ede019c08758eb"
 uuid = "89763e89-9b03-5906-acba-b20f662cd828"
-version = "4.3.0+0"
+version = "4.3.0+1"
 
 [[deps.Libuuid_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2205,9 +2222,9 @@ version = "0.1.4"
 
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
-git-tree-sha1 = "ad368663a5e20dbb8d6dc2fddeefe4dae0781ae8"
+git-tree-sha1 = "c6c0f690d0cc7caddb74cef7aa847b824a16b256"
 uuid = "ea2cea3b-5b76-57ae-a6ef-0a8af62496e1"
-version = "5.15.3+0"
+version = "5.15.3+1"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
@@ -2642,6 +2659,7 @@ version = "0.9.1+5"
 """
 
 # ╔═╡ Cell order:
+# ╟─a0c15db4-d43f-40ce-ab35-e7583b7c0dd4
 # ╟─729faad8-176f-4b6b-af97-3e321c7be3e0
 # ╠═ebe424a8-f385-46ee-80e9-12b99bb2e691
 # ╠═098f4309-d067-4d4e-be6c-8dacdc059b89
@@ -2649,7 +2667,7 @@ version = "0.9.1+5"
 # ╠═b4d08bb8-ea59-11eb-1df0-93d1149fcf0a
 # ╠═5590501e-eab5-4d08-a81f-b1f5a2b91a08
 # ╠═1df5d910-1a95-4049-906f-770eb3a7990a
-# ╟─223375db-94c7-4ac1-bdae-0d6856e2f492
+# ╠═223375db-94c7-4ac1-bdae-0d6856e2f492
 # ╟─24457b9c-64a9-43a4-b3c1-b1f5af7ed823
 # ╠═84c1f22f-5a42-45de-86f0-3729922336e1
 # ╠═64848d48-09a0-4e13-a318-877b66a4f5e6
@@ -2718,6 +2736,7 @@ version = "0.9.1+5"
 # ╠═3a4d265e-d226-480f-ba8d-6064f601c6f1
 # ╠═e7643fc3-f032-47cb-b717-97516b7a696b
 # ╟─611e00d5-cf92-4e0b-9504-8b611b88a897
+# ╟─46c3ba82-c56e-4ee1-9fad-2523137ba84d
 # ╠═917e3c4f-75c7-4759-81d5-a0c6823d784a
 # ╠═8850c353-20ba-4181-ac5a-70ca86e15066
 # ╠═9af2f2b9-a095-458b-b602-b2446d9571a5
