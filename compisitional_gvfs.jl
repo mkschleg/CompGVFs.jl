@@ -427,6 +427,49 @@ critterbot_data = let
 	DataFrames.DataFrame(;(Symbol(n)=>d for (n, d) in zip(col_names, eachslice(cb_data, dims=2)))...)
 end
 
+# ╔═╡ dd1c2f72-379a-4013-a5fc-adf717905b74
+md"## Random Intervals "
+
+# ╔═╡ 5a79876d-d7bf-4829-9658-4ea4477b0349
+let
+	data = zeros(Int, 10000)
+	p1 = 1.0
+	p2 = 0.05
+	rng = Random.Xoshiro(4)
+	cur_p = 0.05
+	for i in eachindex(data)
+		p = rand(rng)
+		if p < cur_p
+			if cur_p == p2
+				cur_p = p1
+			end
+			data[i] = 1
+		end
+		cur_p = max(p2, cur_p - 0.2)
+
+		p3 = rand(rng)
+		if p3 < 0.05
+			data[i] = 1
+		end
+	end
+	plot(data[1:1000])
+end
+
+# ╔═╡ d3ed34bb-3f5d-4565-8465-dc1fa0cc1f9b
+random_data = let
+	data = zeros(Float64, 10000)
+	rng = Random.Xoshiro(4)
+	cur_p = 0.05
+	for i in eachindex(data)
+		p = rand(rng)
+		if p < cur_p
+			data[i] = 1
+		end
+	end
+	plot(data[1:1000])
+	data
+end
+
 # ╔═╡ 1568abbd-856f-46bb-bf30-86ee3e6553c6
 md"""
 # Data Transforms
@@ -565,6 +608,234 @@ function series_sum(γ, i)
 	s
 end
 
+# ╔═╡ d5cc227c-f5f7-47aa-9027-597879fc02df
+md"""
+# Random Cumulant Experiments
+"""
+
+# ╔═╡ eaeb04c5-5371-4811-849e-e3805768d1c2
+function plot_gamma_arb_mult(f_γ, t; T=30)
+	rng = Random.Xoshiro(3)
+	x_top=T
+
+	# t = 15
+	
+	cw_obs = fill(0.0, x_top + 1)
+	for i in 1:(x_top+1)
+		cw_obs[i] = rand(rng)
+	end
+	plt = bar(
+		1:x_top+1, 
+		cw_obs, 
+		bar_width=0.04, 
+		xrange=(0, x_top+2.1),
+		yrange=(0.0, 1.1), 
+		legend=false, 
+		grid=false, 
+		tick_dir=:in,
+		yformatter=(a)->"", xformatter=(a)->"", 
+		yticks=false)
+	
+	scatter!(plt, 1:x_top+1, cw_obs, color=color_scheme[2])
+
+	plt2 = bar(
+		1:x_top+1,
+		(x)->f_γ(t, x),
+		bar_width=0.04,
+		xrange=(0, x_top+2.1),
+		yrange=(0.0, 1.1), 
+		# lw=3,
+		legend=false, 
+		grid=false, 
+		axis=false,
+		yformatter=(a)->"", xformatter=(a)->"", 
+		yticks=false, 
+		color=:black)
+
+	scatter!(plt2, 1:x_top+1, (x)->f_γ(t, x), color=color_scheme[1])
+
+	plt_both = plot(plt2, plt, layout=(2,1))
+
+
+	plt = bar(
+		1:x_top+1,
+		(x)->f_γ(t, x) * cw_obs[x], 
+		bar_width=0.04, 
+		xrange=(0, x_top+2.1), 
+		yrange=(0.0, 1.1), 
+		legend=false, 
+		grid=false, 
+		tick_dir=:in,
+		yformatter=(a)->"", xformatter=(a)->"", 
+		yticks=false)
+	
+	scatter!(plt, 
+			 1:x_top+1, 
+			 (x)->f_γ(t, x) * cw_obs[x], 
+			 color=color_scheme[5])
+
+	plt_both, plt
+
+end
+
+# ╔═╡ 99e4a6e9-caa4-436a-b05d-8059889ca95e
+plot_gamma_mult(t) = plot_gamma_arb_mult(t) do t, x
+	x < t+1 ? 0.0 : 0.9 ^ (x - (t+1))
+end
+
+
+# ╔═╡ ad61416a-3c81-44a9-a2b1-26879b9499c7
+function γⁿ_closed_form(γ, n, k)
+	if k < n
+		zero(γ)
+	elseif n == 1 #NOTE: Deal with prod, closed form works with n=1 as 0!=1
+		γ^(k-1)
+	else
+		prod((k-i) for i in 1:(n-1))/factorial(n-1) * γ^(k-n)
+	end
+end
+
+# ╔═╡ 6a63a5b5-f42f-4e97-9d43-eced19c01cf9
+@bind _rand_t PlutoUI.Slider(0:30)
+
+# ╔═╡ 51255b81-9bab-4614-a6fe-22c9db4d40d8
+let
+	plts = plot_gamma_mult(_rand_t)
+	plot(plts[1], plts[2], size=(700, 300))
+end
+
+# ╔═╡ ae6c39ee-2366-41d8-a576-b43e1c441d6b
+@bind _rand_n_t PlutoUI.Slider(1:30)
+
+# ╔═╡ f20bd192-bc92-4a74-8c24-50b32f83b604
+@bind _rand_n PlutoUI.NumberField(1:20)
+
+# ╔═╡ 8111936a-2c3d-4f2c-8f6c-e25feb60ec72
+let
+	n = _rand_n
+	γ = 0.9
+	h = Int(round(1/(1-γ)))
+	plts = plot_gamma_arb_mult(_rand_n_t; T=50) do t, x
+		# x < t+1 ? 0.0 : 0.9 ^ (x - (t+1))
+		γⁿ_closed_form(γ, n, x-t) / (n == 1 ? 1.0 : max(γⁿ_closed_form(γ, n, (n-1)*h), γⁿ_closed_form(γ, n, (n-1)*h+1)))
+	end
+	plot(plts[1], plts[2], size=(700, 300))
+end
+
+# ╔═╡ 04be37d5-9934-481b-98e1-da94dba09e87
+let
+	local_plot(n, t) = begin
+		# n = _rand_n
+		γ = 0.9
+		h = Int(round(1/(1-γ)))
+		plts = plot_gamma_arb_mult(t; T=50) do t, x
+			# x < t+1 ? 0.0 : 0.9 ^ (x - (t+1))
+			γⁿ_closed_form(γ, n, x-t) / (n == 1 ? 1.0 : max(γⁿ_closed_form(γ, n, (n-1)*h), γⁿ_closed_form(γ, n, (n-1)*h+1)))
+		end
+		plot(plts[1], plts[2], size=(700, 300))
+	end
+
+	if !isdir("nplot_rand_data")
+		mkdir("nplot_rand_data")
+	end
+	
+	for n in 1:5
+		for t in 1:30
+			plt = local_plot(n, t)
+			savefig(plt, "nplot_rand_data/n=$(n),t=$(t).pdf")
+		end
+	end
+
+end
+
+# ╔═╡ a88b0b03-f496-4f70-8271-5a371d0ce769
+md"""
+# Single Cumulant Experiment
+"""
+
+# ╔═╡ 8049b4cd-459c-4ae1-8d28-b357d073a527
+function plot_cycleworld_gamma_arb_mult(f_γ, t; T=30)
+	rng = Random.Xoshiro(3)
+	x_top=T
+
+	# t = 15
+	
+	cw_obs = fill(0.0, x_top + 1)
+	for i in 1:(x_top+1)
+		if i % 10 == 1
+			cw_obs[i] = 1
+		end
+	end
+	plt = bar(
+		1:x_top+1, 
+		cw_obs, 
+		bar_width=0.04, 
+		xrange=(0, x_top+2.1),
+		yrange=(0.0, 1.1), 
+		legend=false, 
+		grid=false, 
+		tick_dir=:in,
+		yformatter=(a)->"", xformatter=(a)->"", 
+		yticks=false)
+	
+	scatter!(plt, 1:x_top+1, cw_obs, color=color_scheme[2])
+
+	plt2 = bar(
+		1:x_top+1,
+		(x)->f_γ(t, x),
+		bar_width=0.04,
+		xrange=(0, x_top+2.1),
+		yrange=(0.0, 1.1), 
+		# lw=3,
+		legend=false, 
+		grid=false, 
+		axis=false,
+		yformatter=(a)->"", xformatter=(a)->"", 
+		yticks=false, 
+		color=:black)
+
+	scatter!(plt2, 1:x_top+1, (x)->f_γ(t, x), color=color_scheme[1])
+
+	plt_both = plot(plt2, plt, layout=(2,1))
+
+
+	plt = bar(
+		1:x_top+1,
+		(x)->f_γ(t, x) * cw_obs[x], 
+		bar_width=0.04, 
+		xrange=(0, x_top+2.1), 
+		yrange=(0.0, 1.1), 
+		legend=false, 
+		grid=false, 
+		tick_dir=:in,
+		yformatter=(a)->"", xformatter=(a)->"", 
+		yticks=false)
+	
+	scatter!(plt, 
+			 1:x_top+1, 
+			 (x)->f_γ(t, x) * cw_obs[x], 
+			 color=color_scheme[5])
+
+	plt_both, plt
+
+end
+
+# ╔═╡ 35892160-d3cc-4bb1-91f5-33ca27a1e488
+let
+	n = 4
+	γ = 0.9
+	t = 1
+	h = Int(round(1/(1-γ)))
+	plts = plot_cycleworld_gamma_arb_mult(t; T=50) do t, x
+		# x < t+1 ? 0.0 : 0.9 ^ (x - (t+1))
+		γⁿ_closed_form(γ, n, x-t) / (n == 1 ? 1.0 : max(γⁿ_closed_form(γ, n, (n-1)*h), γⁿ_closed_form(γ, n, (n-1)*h+1)))
+	end
+	plot(plts[1], plts[2], size=(700, 300))
+end
+
+# ╔═╡ 192b4b4e-8992-47fa-8fad-be98adeb0d4b
+
+
 # ╔═╡ 64a1c059-6dc7-44b5-8cef-f5d517871aab
 md"""
 # Cycle World Experiments
@@ -687,7 +958,6 @@ let
 	
 	plt_end = p_plot(length(horde), xtickfontsize=15)
 	plt = plot(plts[1], plts[2], plts[3], plts[4], plt_end, layout = (5, 1))
-	# savefig(plt, "constant_discount.pdf")
 	plt
 end
 
@@ -763,8 +1033,21 @@ let
 	plt
 end
 
-# ╔═╡ 54f0b409-c1be-4766-b63c-5b0c97e0b03b
+# ╔═╡ d65e55ed-483f-436f-a4fa-091a2fea7a07
 
+
+# ╔═╡ 54f0b409-c1be-4766-b63c-5b0c97e0b03b
+# transformed_mso_term = let
+# 	# norm_data_mso = unit_norm(data_mso)
+# 	ret = [norm_data_mso]
+# 	for i in 1:10
+# 		vs = montecarlo_transform_iterate(ret[end]) do x, idx
+# 			x > 0.9 ? 0.0 : 0.9
+# 		end
+# 		push!(ret, unit_norm(vs))
+# 	end
+# 	ret
+# end
 
 # ╔═╡ 5a116ab2-537e-4eb4-93ff-788ddf741fdf
 md"""
@@ -949,6 +1232,157 @@ let
 	end
 end
 
+# ╔═╡ dd22f696-0e8d-4e17-9422-b3c0b5e09ea2
+md"# Random Intervals"
+
+# ╔═╡ b3b5aff4-d0fb-4161-abad-f2f309db08d2
+transformed_random_const = let
+	data = random_data
+	ret = [data]
+	for i in 1:10
+		vs = montecarlo_transform_iterate(ret[end]) do x, idx
+			0.9
+		end
+		push!(ret, unit_norm(vs))
+	end
+	ret
+end
+
+# ╔═╡ 9840e05e-6f78-45e2-abcc-81f51dcc97e7
+transformed_random_term = let
+	data = random_data
+	ret = [data]
+	for i in 1:10
+		vs = montecarlo_transform_iterate(ret[end]) do x, idx
+			data[idx] > 0.9 ? 0.0 : 0.9
+		end
+		push!(ret, unit_norm(vs))
+	end
+	ret
+end
+
+# ╔═╡ 884ccf9b-f2d8-416c-8132-0dae04bacba3
+transformed_random_term_v2 = let
+	data = random_data
+	ret = [data]
+	for i in 1:10
+		vs = montecarlo_transform_iterate(ret[end]) do x, idx
+			x > 0.9 ? 0.0 : 0.9
+		end
+		push!(ret, unit_norm(vs))
+	end
+	ret
+end
+
+# ╔═╡ 95c58fbf-c05f-4f95-bf2d-28137ca04d4f
+let
+	
+	gr()	
+	yrng = 1000:2500
+	d = transformed_random_term
+	p_plot(x, y, y_term=nothing; kwargs...) = begin
+		plt = plot(x, y;
+			legend=nothing, 
+			lw=2, 
+			grid=false, 
+			tick_dir=:out, 
+			yformatter=(a)->"",
+			yticks=false, 
+			color=color_scheme[4], kwargs...)
+		# plot!(yrng, (x)->0.9)
+		if !isnothing(y_term) && sum(y_term) > 0
+			# @info sum(y_term)
+			yrng_c = collect(yrng)
+			vline!(plt, yrng_c[y_term], color=:gray, linealpha=0.3; kwargs...)
+		end
+		plt
+	end
+	# d = transformed_mso_term
+
+	γ_term(x) = x > 0.9
+	d_term = [γ_term.(d[1]) for d_n in d]
+	
+	plt_first = p_plot(yrng, d[1][yrng], xformatter=(i)->"", color=color_scheme[2])
+	plts = [p_plot(yrng, d[i][yrng], d_term[i-1][yrng]; xformatter=(i)->"")
+				for i in 2:length(d)-1]
+	plt_end = p_plot(yrng, d[end][yrng], d_term[end-1][yrng], xtickfontsize=15)
+	plt = plot(plt_first, plts[1], plts[2], plts[3], plt_end, layouts=(5, 1))
+	# plt = plot(plt_first, plts..., plt_end, layouts=(length(d), 1), size=(400, 1200))
+	savefig(plt, "random_term.pdf")
+	plt
+end
+
+# ╔═╡ 84109119-2233-4cd7-8e50-0cc1c69deef7
+let
+	
+	gr()	
+	yrng = 1000:2500
+	d = transformed_random_term_v2
+	p_plot(x, y, y_term=nothing; kwargs...) = begin
+		plt = plot(x, y;
+			legend=nothing, 
+			lw=2, 
+			grid=false, 
+			tick_dir=:out, 
+			yformatter=(a)->"",
+			yticks=false, 
+			color=color_scheme[4], kwargs...)
+		plot!(yrng, (x)->0.9)
+		if !isnothing(y_term) && sum(y_term) > 0
+			# @info sum(y_term)
+			yrng_c = collect(yrng)
+			vline!(plt, yrng_c[y_term], color=:gray, linealpha=0.3; kwargs...)
+		end
+		plt
+	end
+	# d = transformed_mso_term
+
+	γ_term(x) = x > 0.9
+	d_term = [γ_term.(d_n) for d_n in d]
+	
+	plt_first = p_plot(yrng, d[1][yrng], xformatter=(i)->"", color=color_scheme[2])
+	plts = [p_plot(yrng, d[i][yrng], d_term[i-1][yrng]; xformatter=(i)->"")
+				for i in 2:length(d)-1]
+	plt_end = p_plot(yrng, d[end][yrng], d_term[end-1][yrng], xtickfontsize=15)
+	plt = plot(plt_first, plts[1], plts[2], plts[end-1], plt_end, layouts=(5, 1))
+	# plt = plot(plt_first, plts..., plt_end, layouts=(length(d), 1), size=(400, 1200))
+	# savefig(plt, "mso_term.pdf")
+	plt
+end
+
+# ╔═╡ e2e6ca8f-1151-4226-bdf8-d9826500019e
+let
+	
+	gr()	
+	yrng = 1000:2500
+	d = transformed_random_const
+	p_plot(x, y, y_term=nothing; kwargs...) = begin
+		plt = plot(x, y;
+			legend=nothing, 
+			lw=2, 
+			grid=false, 
+			tick_dir=:out, 
+			yformatter=(a)->"",
+			yticks=false, 
+			color=color_scheme[1], kwargs...)
+		# plot!(yrng, (x)->0.9)
+		plt
+	end
+	# d = transformed_mso_term
+
+
+	
+	plt_first = p_plot(yrng, d[1][yrng], xformatter=(i)->"", color=color_scheme[2])
+	plts = [p_plot(yrng, d[i][yrng]; xformatter=(i)->"")
+				for i in 2:length(d)-1]
+	plt_end = p_plot(yrng, d[end][yrng], xtickfontsize=15)
+	plt = plot(plt_first, plts[1], plts[2], plts[3], plt_end, layouts=(5, 1))
+	# plt = plot(plt_first, plts[2], plts[3], plt_end, layouts=(length(d), 1), size=(400, 1200))
+	# savefig(plt, "mso_term.pdf")
+	savefig(plt, "random_const.pdf")
+	plt
+end
+
 # ╔═╡ f56773f8-57aa-4157-bc65-dea6bce7f6cc
 md"""
 # MSO
@@ -1021,7 +1455,7 @@ let
 		plot(x, y,
 			legend=nothing, 
 			lw=2, 
-			grid=false, 
+			grid=false,
 			tick_dir=:out, 
 			yformatter=(a)->"",
 			yticks=false, 
@@ -1054,7 +1488,7 @@ let
 
 		if !isnothing(y_term)
 			yrng_c = collect(yrng)
-			vline!(plt, yrng_c[y_term], color=:gray; kwargs...)
+			vline!(plt, yrng_c[y_term], color=:gray, linealpha=0.3; kwargs...)
 		end
 		plt
 	end
@@ -1265,12 +1699,15 @@ let
 			color=color_scheme[1]; kwargs...)
 	end
 	first_plt = p_plot(unit_norm(cb_mc[0.9][1])[yrng], xformatter=(a)->"", color=color_scheme[2])
-	plts = [p_plot(unit_norm(cb_mc[0.9][i])[yrng], xformatter=(a)->"") for i in 1:10]
+	plts = [p_plot(unit_norm(cb_mc[0.9][i])[yrng], xformatter=(a)->"") for i in 2:39]
 	last_plt = p_plot(unit_norm(cb_mc[0.9][40])[yrng], xtickfontsize=15)
-	plt = plot(first_plt, plts[2], plts[3], plts[4], last_plt, layout=(5, 1)) 
+	plt = plot(first_plt, plts[6], plts[11], plts[21], last_plt, layout=(5, 1)) 
 	savefig(plt, "cb_const.pdf")
 	plt
 end
+
+# ╔═╡ f493245f-33df-4705-90f6-7f8d3398733a
+@info length(cb_mc[0.9])
 
 # ╔═╡ 3132737d-aa1d-47e8-8e11-cddc44be039c
 cb_mc_term = let
@@ -1290,7 +1727,7 @@ let
 	gr()
 	# yrng = 6500:15000
 	# yrng = [7000:8500; 11000:12500]
-	yrng = [7000:8100; 11000:12500]
+	
 	p_plot(y, y_term=nothing; kwargs...) = begin
 		plt = plot(y,
 			legend=nothing, 
@@ -1303,23 +1740,37 @@ let
 
 		if !isnothing(y_term) && any(y_term)
 			yrng_c = collect(yrng)
-			# vline!(plt, yrng_c[y_term], color=:gray)
+			# @info size(y_term)
+			term_idx = findall(y_term)
+			vline!(plt, term_idx, color=:gray, linealpha=0.3; kwargs...)
 		end
 		plt
 	end
+
+	yrng = [7000:8100; 11000:12500]
 	d = cb_mc_term
 
 	γ_term(x) = x > 0.9
 	d_term = [γ_term.(d_n) for d_n in d]
 	
 	plt_first = p_plot(d[1][yrng], xformatter=(i)->"", color=color_scheme[2])
-	plts = [p_plot(d[i][yrng], d_term[i-1][yrng], xformatter=(i)->"")
+	plts = [p_plot(d[i][yrng], d_term[1][yrng], xformatter=(i)->"")
 				for i in 2:length(d)-1]
-	plt_end = p_plot(d[end][yrng], d_term[end-1][yrng], xtickfontsize=15)
-	plt = plot(plt_first, plts[1], plts[2], plts[3], plt_end, layouts=(5, 1))
+	plt_end = p_plot(d[end][yrng], d_term[1][yrng], xtickfontsize=15)
+	plt = plot(plt_first, plts[5], plts[10], plts[20], plt_end, layouts=(5, 1))
 
 	savefig(plt, "cb_term.pdf")
 	plt
+end
+
+# ╔═╡ bac4e97b-acd8-409f-bb51-3ea470fc33ed
+let
+	d = cb_mc_term
+	γ_term(x) = x > 0.9
+	# d_term = [γ_term.(d_n) for d_n in d]
+	yrng = [7000:8100; 11000:12500]
+	# d_term[1][yrng]
+	findall((x)->γ_term(x), d[1][yrng])
 end
 
 # ╔═╡ ddd34a5a-38eb-4f89-a515-093f1d0275cb
@@ -2729,6 +3180,9 @@ version = "0.9.1+5"
 # ╠═650de732-e312-41d5-938c-beb5e330ee0f
 # ╠═c88e09f3-88c4-4e27-837c-bce455447e99
 # ╠═94eaa0f6-cbd6-4d10-a24c-f6296048633b
+# ╠═dd1c2f72-379a-4013-a5fc-adf717905b74
+# ╠═5a79876d-d7bf-4829-9658-4ea4477b0349
+# ╠═d3ed34bb-3f5d-4565-8465-dc1fa0cc1f9b
 # ╟─1568abbd-856f-46bb-bf30-86ee3e6553c6
 # ╟─91957826-379f-4db4-9a61-fc7c5fa667b1
 # ╠═931db888-1f65-4ac8-965a-e3fa12672ea4
@@ -2749,6 +3203,20 @@ version = "0.9.1+5"
 # ╠═f6b4a7a9-b729-4c3a-9e56-206e66795b77
 # ╠═f5607f9c-033c-48e2-ab64-08d1b4a9821e
 # ╠═f9c6ee93-b346-46e5-8a0a-a8545dc21306
+# ╠═d5cc227c-f5f7-47aa-9027-597879fc02df
+# ╠═eaeb04c5-5371-4811-849e-e3805768d1c2
+# ╠═99e4a6e9-caa4-436a-b05d-8059889ca95e
+# ╠═ad61416a-3c81-44a9-a2b1-26879b9499c7
+# ╠═6a63a5b5-f42f-4e97-9d43-eced19c01cf9
+# ╠═51255b81-9bab-4614-a6fe-22c9db4d40d8
+# ╠═ae6c39ee-2366-41d8-a576-b43e1c441d6b
+# ╠═f20bd192-bc92-4a74-8c24-50b32f83b604
+# ╠═8111936a-2c3d-4f2c-8f6c-e25feb60ec72
+# ╠═04be37d5-9934-481b-98e1-da94dba09e87
+# ╟─a88b0b03-f496-4f70-8271-5a371d0ce769
+# ╠═8049b4cd-459c-4ae1-8d28-b357d073a527
+# ╠═35892160-d3cc-4bb1-91f5-33ca27a1e488
+# ╠═192b4b4e-8992-47fa-8fad-be98adeb0d4b
 # ╟─64a1c059-6dc7-44b5-8cef-f5d517871aab
 # ╟─1dd3e976-d74b-40bf-ab23-642fc6ccd5ea
 # ╠═16671204-227f-436c-9e1d-f4f5738df3f9
@@ -2760,6 +3228,7 @@ version = "0.9.1+5"
 # ╟─550e9a33-00d0-4312-849c-6b9c8d49e8c6
 # ╠═589b2c19-9b71-4a33-934e-c03b6fba851b
 # ╠═c0c69cbc-6205-4b9f-93b0-86f2c65e226b
+# ╠═d65e55ed-483f-436f-a4fa-091a2fea7a07
 # ╠═54f0b409-c1be-4766-b63c-5b0c97e0b03b
 # ╟─5a116ab2-537e-4eb4-93ff-788ddf741fdf
 # ╠═f0eb7e3a-9f63-44de-8910-64669f985d09
@@ -2770,6 +3239,13 @@ version = "0.9.1+5"
 # ╠═ed171485-39cf-4bba-8a42-12aafc4e6f92
 # ╠═af197fd3-f997-404e-acda-d8de0bba202d
 # ╠═04cbe365-e019-4963-a191-68ff02fd13b3
+# ╠═dd22f696-0e8d-4e17-9422-b3c0b5e09ea2
+# ╠═b3b5aff4-d0fb-4161-abad-f2f309db08d2
+# ╠═9840e05e-6f78-45e2-abcc-81f51dcc97e7
+# ╠═884ccf9b-f2d8-416c-8132-0dae04bacba3
+# ╠═95c58fbf-c05f-4f95-bf2d-28137ca04d4f
+# ╠═84109119-2233-4cd7-8e50-0cc1c69deef7
+# ╠═e2e6ca8f-1151-4226-bdf8-d9826500019e
 # ╟─f56773f8-57aa-4157-bc65-dea6bce7f6cc
 # ╟─77073f41-cde0-42fb-a4b9-9a6ef3285923
 # ╠═04e159db-2740-41ae-b543-8e4f0874fb3b
@@ -2804,8 +3280,10 @@ version = "0.9.1+5"
 # ╠═2adfe1a3-1419-470d-a7a7-63f6c82b86b7
 # ╠═97c5c775-2cbf-4ca3-bec3-40ccb18b3082
 # ╠═92a3653d-5b6a-446b-a6cd-110ae1bde679
+# ╠═f493245f-33df-4705-90f6-7f8d3398733a
 # ╠═3132737d-aa1d-47e8-8e11-cddc44be039c
 # ╠═e7b95a71-780f-48dd-99b6-f9ef863dae19
+# ╠═bac4e97b-acd8-409f-bb51-3ea470fc33ed
 # ╠═ddd34a5a-38eb-4f89-a515-093f1d0275cb
 # ╠═df66901c-074d-42a7-91e5-db5e81048881
 # ╠═43b85260-18ed-4035-b1c1-86946b7e89fd
