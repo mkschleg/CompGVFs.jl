@@ -56,6 +56,9 @@ end
 # ╔═╡ 49c35c5b-e99c-4768-99fd-6344f8ebd3e1
 get_value(fc::FeatureCumulant, o, x, p, r) = x[fc.idx]
 
+# ╔═╡ e3a469fb-98d1-4a17-b1f4-2dc77a8224a4
+get_value(fc::FeatureCumulant, o, x::Int, p, r) = fc.idx == x
+
 # ╔═╡ 3f3048ff-843f-41b0-aa86-b64090cddc57
 get_value(fc::FeatureCumulant, o, x::Vector{Int}, p, r) = fc.idx ∈ x
 
@@ -128,6 +131,9 @@ end
 # ╔═╡ 7bbe957e-0669-42e5-9384-e31fc31f8283
 get_value(fc::TerminatingDiscount, o, x::Vector{Int}) = fc.idx ∈ x ? zero(typeof(fc.γ)) : fc.γ
 
+# ╔═╡ c2a35607-bf5c-441f-a708-53f32101f33e
+get_value(fc::TerminatingDiscount, o, x::Int) = fc.idx == x ? zero(typeof(fc.γ)) : fc.γ
+
 # ╔═╡ 6481cbd3-7ae0-4adc-b7bd-d4fa1957defa
 md"""
 ## GVF
@@ -137,9 +143,9 @@ md"""
 # What are we doing.
 # Massively parallel linear GVF learning
 begin
-	struct GVF{W, Z, C, Π, Γ}
+	struct GVF{W, C, Π, Γ}
 		w::W
-		z::Z
+		z::W
 		c::C
 		π::Π
 		γ::Γ
@@ -160,6 +166,11 @@ end
 
 # ╔═╡ 8a44f9bd-b7ab-4102-8234-d73f7e979fa9
 predict(gvf::GVF{<:AbstractVector}, x::Int) = begin; 
+	gvf.w[x]
+end
+
+# ╔═╡ 594b5d03-9dc9-4df7-bef4-a71a81224e27
+predict(gvf::GVF{<:AbstractMatrix}, x::AbstractVector{Int}) = begin; 
 	gvf.w[x]
 end
 
@@ -199,10 +210,31 @@ function update!(
         view(z, x_t) .+= 1
         z .*= ρ_t
         w .+= (lu.α * δ) .* z
-    else
+	else
         z .= ρ_t .* ((γ_t*λ) .* gvf.z .+ x_t)
         w .+= lu.α * δ * gvf.z
     end
+end
+
+# ╔═╡ 47eba562-99e0-4815-a028-21f7376cd257
+function update!(
+		lu::TDλ, 
+		gvf,
+		x_t::Int, x_tp1::Int, 
+		ρ_t, c, γ_t, γ_tp1)
+    
+    λ = lu.λ
+
+	w = gvf.w
+	z = gvf.z
+	
+    δ = c + γ_tp1*predict(gvf, x_tp1) - predict(gvf, x_t)
+    
+    z .*= γ_t*λ
+    view(z, x_t) .+= 1
+    z .*= ρ_t
+    w .+= (lu.α * δ) .* z
+
 end
 
 # ╔═╡ 44bba6f3-5f82-4c9a-b4da-e33f23010ee3
@@ -228,7 +260,8 @@ end
 # ╔═╡ a69fed13-737d-4fd6-8baf-0dabe7f339a5
 function update!(lu, gvfs::Vector{G}, args...) where G<:GVF
 	# We should thunk here....
-    Threads.@threads for i in 1:length(gvfs)
+	# @info gvfs
+	for i in 1:length(gvfs)
 		update!(lu, gvfs[i], args...)
     end
 end
@@ -330,15 +363,19 @@ mutable struct GridWithWalls <: AbstractEnvironment
     state::Vector{Int}
     const walls::Array{Bool, 2}
 	const ACTIONS::Tuple{Int, Int, Int, Int}
+	const UP
+	const RIGHT
+	const DOWN
+	const LEFT
 	function GridWithWalls(size::Int, wall_list::Array{CartesianIndex{2}})
 	    walls = fill(false, size[1], size[2])
 	    for wall in wall_list
 	        walls[wall] = true
 	    end
-	    new([1,1], walls, (1,2,3,4))
+	    new([1,1], walls)
 	end
 	function GridWithWalls(walls::Array{Int64, 2})
-	    new([1,1], convert(Array{Bool}, walls), (1,2,3,4))
+	    new([1,1], convert(Array{Bool}, walls), (1, 2, 3, 4), 1, 2, 3, 4)
 	end
 end
 
@@ -355,23 +392,19 @@ function FourRooms()
               	  0 0 0 0 0 1 0 0 0 0 0;
               	  0 0 0 0 0 0 0 0 0 0 0;
               	  0 0 0 0 0 1 0 0 0 0 0;]
+	BASE_WALLS = [0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;
+             	  0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;
+            	  0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;
+              	  0 0 0 0 0 0 0 0 0 0 0;]
 	GridWithWalls(BASE_WALLS)
 end
-
-# ╔═╡ 04921e5e-43fe-443c-9762-1e4e6d443790
-# FourRooms() = FourRooms([0,0], convert(Array{Bool}, FourRoomsParams.BASE_WALLS))
-
-# ╔═╡ a85a86f0-9eeb-48eb-9b7b-a8227c449d23
-# FourRooms(walls::Array{Int64, 2}) = FourRooms([0,0], convert(Array{Bool}, walls))
-
-# ╔═╡ ccace211-99ff-4158-9fcc-141e10e18547
-# function FourRooms(size::Int, wall_list::Array{CartesianIndex{2}})
-#     walls = fill(false, size[1], size[2])
-#     for wall in wall_list
-#         walls[wall] = true
-#     end
-#     FourRooms((0,0), walls)
-# end
 
 # ╔═╡ 621e43ea-2006-472e-b6a5-94ae68d07bf2
 MinimalRLCore.is_terminal(env::GridWithWalls) = false
@@ -379,14 +412,14 @@ MinimalRLCore.is_terminal(env::GridWithWalls) = false
 # ╔═╡ ab3597f3-ed93-42be-b22a-74c9a507cc57
 MinimalRLCore.get_reward(env::GridWithWalls) = 0
 
-# ╔═╡ 9b9bc9ae-5ea5-4f1d-afaf-7d4d20b2baf5
-MinimalRLCore.get_state(env::GridWithWalls) = env.state
-
 # ╔═╡ f48d5184-2b3c-4fea-9948-66332e40d74d
 is_wall(env::GridWithWalls, state) = env.walls[state[1], state[2]] == 1
 
 # ╔═╡ 841a7a9f-fc8d-4107-a411-3039e1826325
-Base.size(env::GridWithWalls) = size(env.walls)
+Base.size(env::GridWithWalls, args...) = size(env.walls, args...)
+
+# ╔═╡ 9b9bc9ae-5ea5-4f1d-afaf-7d4d20b2baf5
+MinimalRLCore.get_state(env::GridWithWalls) = (env.state[1] - 1) * size(env, 1) + env.state[2]
 
 # ╔═╡ 6bc7973a-98a2-40dd-8a2d-aa27887c8fa1
 random_state(env::GridWithWalls, rng) = [rand(rng, 1:size(env.walls)[1]), rand(rng, 1:size(env.walls)[2])]
@@ -400,32 +433,6 @@ get_states(env::GridWithWalls) = findall(x->x==false, env.walls)
 # ╔═╡ ab1bf706-9b9c-4b2f-b68b-65dfd6acf04b
 MinimalRLCore.get_actions(env::GridWithWalls) = FourRoomsParams.ACTIONS
 
-# ╔═╡ fb67cd66-aa1e-49ed-b97b-1b809989c446
-# function which_room(env::GridWithWalls, state)
-#     frp = FourRoomsParams
-#     room = -1
-#     if state[1] < 6
-#         # LEFT
-#         if state[2] < 6
-#             # TOP
-#             room = frp.ROOM_TOP_LEFT
-#         else
-#             # Bottom
-#             room = frp.ROOM_BOTTOM_LEFT
-#         end
-#     else
-#         # RIGHT
-#         if state[2] < 7
-#             # TOP
-#             room = frp.ROOM_TOP_RIGHT
-#         else
-#             # Bottom
-#             room = frp.ROOM_BOTTOM_RIGHT
-#         end
-#     end
-#     return room
-# end
-
 # ╔═╡ 07501680-edfd-4d17-b399-d37bb7806ee0
 function MinimalRLCore.reset!(env::GridWithWalls, rng=nothing; kwargs...)
     state = random_state(env, rng)
@@ -437,10 +444,10 @@ function MinimalRLCore.reset!(env::GridWithWalls, rng=nothing; kwargs...)
 end
 
 # ╔═╡ 6f194e0d-e844-4d4c-b946-7ea8b75327fc
-function MinimalRLCore.environment_step!(env::GridWithWalls, action, rng=Random.default_rng(); kwargs...)
+function MinimalRLCore.environment_step!(
+	env::GridWithWalls, action, rng=Random.default_rng(); kwargs...)
 
-
-    frp = FourRoomsParams
+    frp = env
     next_state = copy(env.state)
 
     if action == frp.UP
@@ -464,7 +471,7 @@ end
 
 # ╔═╡ 992f3a2d-a942-4d72-8f7d-c37f904e915f
 function _step(env::GridWithWalls, state, action, rng, kwargs...)
-    frp = FourRoomsParams
+    frp = env
     next_state = copy(state)
 
     if action == frp.UP
@@ -493,10 +500,7 @@ function _step(env::GridWithWalls, state::CartesianIndex{2}, action)
     return CartesianIndex{2}(new_state[1], new_state[2]), r, t
 end
 
-# ╔═╡ 1098fdfc-b5ba-4105-a4a3-bf7217efaf16
-FourRooms()
-
-# ╔═╡ 7f71a179-5330-4156-8ae6-ae28a7752735
+# ╔═╡ b06785ff-c044-4873-87b8-b9d4d977bf88
 function Base.show(io::IO, env::GridWithWalls)
 	model = fill("□", size(env.walls)...)
 	model[env.walls] .= "▤"
@@ -505,6 +509,32 @@ function Base.show(io::IO, env::GridWithWalls)
 		println(io, join(row, " "))
 	end
 end
+
+# ╔═╡ e2c6be01-f399-4acf-8b9a-4a89b9c3e6a3
+# function which_room(env::GridWithWalls, state)
+#     frp = FourRoomsParams
+#     room = -1
+#     if state[1] < 6
+#         # LEFT
+#         if state[2] < 6
+#             # TOP
+#             room = frp.ROOM_TOP_LEFT
+#         else
+#             # Bottom
+#             room = frp.ROOM_BOTTOM_LEFT
+#         end
+#     else
+#         # RIGHT
+#         if state[2] < 7
+#             # TOP
+#             room = frp.ROOM_TOP_RIGHT
+#         else
+#             # Bottom
+#             room = frp.ROOM_BOTTOM_RIGHT
+#         end
+#     end
+#     return room
+# end
 
 # ╔═╡ 1c793c5e-a2d6-4160-b672-281017b6aeae
 md"""
@@ -564,23 +594,23 @@ end
 md"# Myopic Chain"
 
 # ╔═╡ 5019fe8f-8755-4f61-8f7a-e8fa14e39fa1
-cw_myopic_hrd, cw_myopic_p = let	
-	env_size = 10
-	num_steps = 100000
-	lu = TDλ(0.1, 0.9)
-	γ = 0.0
-	horde, p = cycleworld_experiment(env_size, num_steps, TDλ(0.1, 0.9)) do 
-		[[GVF(env_size, 
-			FeatureCumulant(1), 
-			OnPolicy(), 
-			ConstantDiscount(γ))];
-		[GVF(env_size, 
-			PredictionCumulant(i), 
-			OnPolicy(), 
-			ConstantDiscount(γ)) for i in 1:9]]
-	end
-	horde, p
-end
+# cw_myopic_hrd, cw_myopic_p = let	
+# 	env_size = 10
+# 	num_steps = 100000
+# 	lu = TDλ(0.1, 0.9)
+# 	γ = 0.0
+# 	horde, p = cycleworld_experiment(env_size, num_steps, TDλ(0.1, 0.9)) do 
+# 		[[GVF(env_size, 
+# 			FeatureCumulant(1), 
+# 			OnPolicy(), 
+# 			ConstantDiscount(γ))];
+# 		[GVF(env_size, 
+# 			PredictionCumulant(i), 
+# 			OnPolicy(), 
+# 			ConstantDiscount(γ)) for i in 1:9]]
+# 	end
+# 	horde, p
+# end
 
 # ╔═╡ 7d5013b6-c0a7-452a-8e06-2ea5c21c1788
 let
@@ -629,6 +659,111 @@ let
 	plt
 end
 
+# ╔═╡ e95c6f92-86bb-4f93-8ed9-10025e0dbf9f
+md"# Four Rooms Experiment"
+
+# ╔═╡ 2faab55b-74b0-4e6f-b36b-a85eceb17c87
+let
+	env = FourRooms()
+	env.state = [1, 11]
+	env
+	MinimalRLCore.get_state(env)
+end
+
+# ╔═╡ ab8035d2-3d55-4d82-b078-65a866bdebe0
+function fourrooms_experiment!(
+		horde, 
+		num_steps,
+		lu = TDλ(0.1, 0.9); kwargs...)
+
+	
+	env = FourRooms() #CycleWorld(env_size, partially_observable=false)
+	
+	s_t = start!(env, Random.default_rng())
+	
+	@progress for step in 1:num_steps
+
+		a_t = rand(env.ACTIONS)
+		s_tp1, r_tp1, _ = step!(env, a_t)
+		p_tp1 = predict(horde, s_tp1)
+		update!(lu, horde, s_t, s_t, a_t, 1/length(env.ACTIONS), s_tp1, s_tp1, r_tp1, p_tp1)
+
+		s_t = copy(s_tp1)
+	end
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	p = [predict(horde, x) for x in 1:env_feat_size]
+	
+	p
+end
+
+# ╔═╡ a4cb5611-2572-47da-8a74-ad475c0e222e
+function fourrooms_experiment(horde_init::Function, args...; kwargs...)
+	horde = horde_init()
+	p = fourrooms_experiment!(horde, args...; kwargs...)
+	horde, p
+end
+
+# ╔═╡ 1746c4a8-7b2b-4187-825f-be978af4ace9
+fr_gamma_hrd, fr_gamma_p = let	
+	num_steps = 1000000
+	lu = TDλ(0.1, 0.9)
+	γ = 0.9
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	horde, p = fourrooms_experiment(num_steps, TDλ(0.1, 0.9)) do 
+		[[GVF(env_feat_size, 
+			FeatureCumulant(11), 
+			OnPolicy(), 
+			ConstantDiscount(γ))
+			# TerminatingDiscount(γ, 11))
+		];
+		[GVF(env_feat_size, 
+			PredictionCumulant(i), 
+			OnPolicy(), 
+			ConstantDiscount(γ))
+			# TerminatingDiscount(γ, 11)) 
+			for i in 1:9]]
+	end
+	horde, p
+end
+
+# ╔═╡ 5cfb16ca-463c-4119-8369-0c9742a3a8eb
+heatmap(reshape(getindex.(fr_gamma_p, 1), 11, 11))
+
+# ╔═╡ 44ae7ccf-fdd2-4f8a-b7c7-543d649d57fc
+heatmap(reshape(getindex.(fr_gamma_p, 9), 11, 11))
+
+# ╔═╡ 74a4a631-514a-4f74-82ff-ab68ddab4977
+fr_term_hrd, fr_term_p = let	
+	num_steps = 5000000
+	lu = TDλ(0.01, 0.9)
+	γ = 0.9
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	horde, p = fourrooms_experiment(num_steps, TDλ(0.1, 0.9)) do 
+		[[GVF(env_feat_size, 
+			FeatureCumulant(11), 
+			OnPolicy(), 
+			# ConstantDiscount(γ))
+			TerminatingDiscount(γ, 11))
+		];
+		[GVF(env_feat_size, 
+			PredictionCumulant(i), 
+			OnPolicy(), 
+			# ConstantDiscount(γ))
+			TerminatingDiscount(γ, 11)) 
+			for i in 1:11]]
+	end
+	horde, p
+end
+
+# ╔═╡ fcf6606f-8c16-4c27-8813-419cb53bf0e1
+heatmap(reshape(getindex.(fr_term_p, 1), 11, 11))
+
+# ╔═╡ 58f69245-65e8-4e8e-a63d-c2000e77fbd4
+heatmap(reshape(getindex.(fr_term_p, 11), 11, 11))
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -651,7 +786,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "9a3d7b89ab75e054f8038fb41002f044c9cedb2f"
+project_hash = "6a32e546fa298cafac8b4624325a79e3a3942a2e"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -736,9 +871,9 @@ version = "0.3.1"
 
 [[deps.Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
-git-tree-sha1 = "7a60c856b9fa189eb34f5f8a6f6b5529b7942957"
+git-tree-sha1 = "61fdd77467a5c3ad071ef8277ac6bd6af7dd4c04"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.6.1"
+version = "4.6.0"
 
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1182,9 +1317,9 @@ version = "10.40.0+0"
 
 [[deps.Parsers]]
 deps = ["Dates", "SnoopPrecompile"]
-git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
+git-tree-sha1 = "6f4fbcd1ad45905a5dee3f4256fabb49aa2110c6"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.5.8"
+version = "2.5.7"
 
 [[deps.Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
@@ -1291,9 +1426,9 @@ version = "0.7.0"
 
 [[deps.Scratch]]
 deps = ["Dates"]
-git-tree-sha1 = "30449ee12237627992a99d5e30ae63e4d78cd24a"
+git-tree-sha1 = "f94f779c94e58bf9ea243e77a37e16d9de9126bd"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
-version = "1.2.0"
+version = "1.1.1"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -1647,6 +1782,7 @@ version = "1.4.1+0"
 # ╟─c9f0f1e2-d596-45d4-9a6b-ead881e615f3
 # ╠═440a6393-d3f2-4158-9cad-a9a3ffb658b7
 # ╠═49c35c5b-e99c-4768-99fd-6344f8ebd3e1
+# ╠═e3a469fb-98d1-4a17-b1f4-2dc77a8224a4
 # ╠═3f3048ff-843f-41b0-aa86-b64090cddc57
 # ╠═a22330b9-c3f7-42da-929b-1023ccea6df2
 # ╠═ca873653-1b35-42a7-a3f6-b0b6f8c3d314
@@ -1664,16 +1800,19 @@ version = "1.4.1+0"
 # ╠═6d1f2c5c-90e5-41e7-a6b9-1abb7f2426ad
 # ╠═2e621539-afc9-4306-8f2b-d418099f5a34
 # ╠═7bbe957e-0669-42e5-9384-e31fc31f8283
+# ╠═c2a35607-bf5c-441f-a708-53f32101f33e
 # ╟─6481cbd3-7ae0-4adc-b7bd-d4fa1957defa
 # ╠═d6e1b5c1-568d-43d5-a90f-dd0dd3c907f7
 # ╠═0ba53300-2ff7-4c59-b7c9-d9896ed497af
 # ╠═4e01a022-5bb6-47de-81d3-9ff418198f6c
 # ╠═8a44f9bd-b7ab-4102-8234-d73f7e979fa9
+# ╠═594b5d03-9dc9-4df7-bef4-a71a81224e27
 # ╟─b8e3c48e-e7f6-402f-8f44-08663bd273a2
 # ╠═b4c75f1b-fbc5-4370-8241-f51e7865fcdd
 # ╠═7b3b895a-4563-42be-8d4f-5cb9dd53a6d7
 # ╠═32c22f6c-02b2-4064-9b79-eeed1bb975ce
 # ╠═0398417f-db77-4ec7-b385-9f3206a5365c
+# ╠═47eba562-99e0-4815-a028-21f7376cd257
 # ╠═44bba6f3-5f82-4c9a-b4da-e33f23010ee3
 # ╠═a69fed13-737d-4fd6-8baf-0dabe7f339a5
 # ╟─0bc9f5c5-6fb4-4874-8820-3345f50055e6
@@ -1689,12 +1828,9 @@ version = "1.4.1+0"
 # ╠═924b6945-3826-4138-aa00-206ddb9840a5
 # ╠═f18749cd-0160-44ed-b91f-30a6a9dfad8f
 # ╠═1775dc2a-91ea-4303-a5c7-b260dd06278d
-# ╠═940461dc-735f-4297-ad5d-f67a23ebbb5f
+# ╟─940461dc-735f-4297-ad5d-f67a23ebbb5f
 # ╠═1e62ec00-975b-492c-bb11-f7b7892a58e8
 # ╠═70d5188f-20dd-49cd-a18d-aeefa16d8bb2
-# ╠═04921e5e-43fe-443c-9762-1e4e6d443790
-# ╠═a85a86f0-9eeb-48eb-9b7b-a8227c449d23
-# ╠═ccace211-99ff-4158-9fcc-141e10e18547
 # ╠═621e43ea-2006-472e-b6a5-94ae68d07bf2
 # ╠═ab3597f3-ed93-42be-b22a-74c9a507cc57
 # ╠═9b9bc9ae-5ea5-4f1d-afaf-7d4d20b2baf5
@@ -1704,20 +1840,29 @@ version = "1.4.1+0"
 # ╠═bdb1b1da-f2d3-4248-b5bd-d6135c61d89c
 # ╠═b16223bf-e803-4c08-9d68-e688db7351e5
 # ╠═ab1bf706-9b9c-4b2f-b68b-65dfd6acf04b
-# ╠═fb67cd66-aa1e-49ed-b97b-1b809989c446
 # ╠═07501680-edfd-4d17-b399-d37bb7806ee0
 # ╠═6f194e0d-e844-4d4c-b946-7ea8b75327fc
 # ╠═992f3a2d-a942-4d72-8f7d-c37f904e915f
 # ╠═983c6296-db06-419c-81ed-eac04fa4db75
-# ╠═1098fdfc-b5ba-4105-a4a3-bf7217efaf16
-# ╠═7f71a179-5330-4156-8ae6-ae28a7752735
-# ╠═1c793c5e-a2d6-4160-b672-281017b6aeae
+# ╠═b06785ff-c044-4873-87b8-b9d4d977bf88
+# ╠═e2c6be01-f399-4acf-8b9a-4a89b9c3e6a3
+# ╟─1c793c5e-a2d6-4160-b672-281017b6aeae
 # ╠═6f50c308-4f63-42f1-a80c-0bbbe09f5632
 # ╠═b8bdcfa7-84f9-4547-997c-a7cc3d6c0521
 # ╠═47390cc3-cf50-4647-8ba9-76539f0e7916
 # ╠═0b3f6284-63db-481a-9967-6bc538b677bc
-# ╠═02e5353b-1536-454b-8526-fb3fd4449a89
-# ╟─5019fe8f-8755-4f61-8f7a-e8fa14e39fa1
+# ╟─02e5353b-1536-454b-8526-fb3fd4449a89
+# ╠═5019fe8f-8755-4f61-8f7a-e8fa14e39fa1
 # ╟─7d5013b6-c0a7-452a-8e06-2ea5c21c1788
+# ╟─e95c6f92-86bb-4f93-8ed9-10025e0dbf9f
+# ╠═2faab55b-74b0-4e6f-b36b-a85eceb17c87
+# ╠═a4cb5611-2572-47da-8a74-ad475c0e222e
+# ╠═ab8035d2-3d55-4d82-b078-65a866bdebe0
+# ╠═1746c4a8-7b2b-4187-825f-be978af4ace9
+# ╠═5cfb16ca-463c-4119-8369-0c9742a3a8eb
+# ╠═44ae7ccf-fdd2-4f8a-b7c7-543d649d57fc
+# ╠═74a4a631-514a-4f74-82ff-ab68ddab4977
+# ╠═fcf6606f-8c16-4c27-8813-419cb53bf0e1
+# ╠═58f69245-65e8-4e8e-a63d-c2000e77fbd4
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
