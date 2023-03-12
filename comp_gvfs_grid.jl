@@ -154,6 +154,18 @@ begin
 		GVF(zeros(num_feats), zeros(num_feats), cumulant, policy, discount)
 end
 
+# ╔═╡ 5e6ded46-1ff1-4667-966c-7e2bd4a35945
+struct GVFCumulant{G<:GVF}
+	gvf::G
+end
+
+# ╔═╡ 51e69bed-bf48-4688-87fd-d0c9e9bfc34e
+struct GVFThreshTerminatingDiscount{F, G<:GVF}
+	γ::F
+	gvf::G
+	θ::Float64
+end
+
 # ╔═╡ 0ba53300-2ff7-4c59-b7c9-d9896ed497af
 predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{<:Number}) = 
 	dot(gvf.w, x)
@@ -189,6 +201,83 @@ predict(horde::Horde, x) = [predict(gvf, x) for gvf in horde]
 struct TDλ
     α::Float32
     λ::Float32
+end
+
+# ╔═╡ a69fed13-737d-4fd6-8baf-0dabe7f339a5
+function update!(lu, gvfs::Vector{G}, args...) where G<:GVF
+	# We should thunk here....
+	# @info gvfs
+	for i in 1:length(gvfs)
+		update!(lu, gvfs[i], args...)
+    end
+end
+
+# ╔═╡ 356c80aa-d825-45dc-8708-cf7ad6ede14f
+md"# Learned Policies"
+
+# ╔═╡ 217a9a10-1b57-4d4a-8b41-eeaea71c749f
+struct ϵGreedy
+	ϵ::Float32
+end
+
+# ╔═╡ 5001c4a2-343d-4f5e-a2e4-4e01750932e9
+function get_value(π::ϵGreedy, q, a_t)
+	idx = findall(==(maximum(q)), q)
+	if a_t ∈ idx
+		(1 - π.ϵ) / length(idx)
+	else
+		π.ϵ / length(q)
+	end
+end
+
+# ╔═╡ 695fd511-5f59-4e77-8b26-5e3787dbc198
+findall(==(maximum([1, 1, 0, 0])), [1, 1, 0, 0])
+
+# ╔═╡ 708a85fd-9b52-420b-a468-f8b4129ce794
+function get_action(π::ϵGreedy, q)
+	if rand() < π.ϵ
+		rand(1:length(q))
+	else
+		rand(findall(==(maximum(q)), q))
+		
+		# argmax(q)
+	end
+end
+
+# ╔═╡ ba9085c6-cecb-4ea5-8f3d-0ed21a23c196
+mutable struct BDemon{W, C, Π, Γ}
+	w::W
+	z::W
+	c::C
+	π::Π
+	γ::Γ
+	BDemon(num_feats::Int, num_actions::Int, cumulant, policy, discount) = 
+		new{Matrix{Float64}, typeof(cumulant), typeof(policy), typeof(discount)}(zeros(num_actions, num_feats), zeros(num_actions, num_feats), cumulant, policy, discount)
+end
+
+# ╔═╡ cda934f1-08f7-460a-b4b2-c9c20ade52a4
+function MinimalRLCore.start!(bdemon::BDemon, s_t, x_t=s_t)
+	bdemon.z .= 0
+end
+
+# ╔═╡ 6733a1bb-88bd-4e01-9a03-dd39279ba1e7
+predict(bdemon::BDemon{<:AbstractMatrix}, x::Int) = begin; 
+	bdemon.w[:, x]
+end
+
+# ╔═╡ 33db32af-2e34-4dad-abcc-e023349aae70
+predict(bdemon::BDemon{<:AbstractMatrix}, a::Int, x::Int) = begin; 
+	bdemon.w[a, x]
+end
+
+# ╔═╡ 349185f3-855d-40b7-a669-8468e0bb686c
+get_value(gvfc::GVFCumulant, o, x, p, r) = 
+	predict(gvfc.gvf, x)
+
+# ╔═╡ fa854b1a-a28c-4a28-b8e4-3e03a4a99810
+get_value(fc::GVFThreshTerminatingDiscount, o, x::Int) = begin
+	predict(fc.gvf, x) > fc.θ ? zero(typeof(fc.γ)) : fc.γ
+	# fc.idx == x ? zero(typeof(fc.γ)) : fc.γ
 end
 
 # ╔═╡ 0398417f-db77-4ec7-b385-9f3206a5365c
@@ -237,6 +326,46 @@ function update!(
 
 end
 
+# ╔═╡ 660e8864-012f-4347-abf0-777d8c20aecd
+function get_action(demon::BDemon, x_t)
+	get_action(demon.π, predict(demon, x_t))
+end
+
+# ╔═╡ 3bffcae1-1570-4d9f-814a-702afd51d3e4
+struct Qλ
+	α::Float32
+	λ::Float32
+end
+
+# ╔═╡ a351143c-a221-4c44-94a6-249308c38a11
+function update!(
+		lu::Qλ, 
+		bdemon,
+		x_t::Int, x_tp1::Int, 
+		a_t::Int, c, γ_t, γ_tp1)
+    
+    λ = lu.λ
+
+	w = bdemon.w
+	z = bdemon.z
+
+	Q_t = predict(bdemon, a_t, x_t)
+	Q_tp1 = maximum(predict(bdemon, x_tp1))
+	
+    δ = c + γ_tp1*Q_tp1 - Q_t
+    
+    z .*= γ_t*λ
+
+    view(z, a_t, x_t) .+= 1
+    w .+= (lu.α * δ) .* z
+
+end
+
+# ╔═╡ 55a73859-6da8-4d4f-a391-a9bf63a2f98c
+function get_value(bdemon::BDemon, s_t, a_t)
+	get_value(bdemon.π, predict(bdemon, s_t), a_t)
+end
+
 # ╔═╡ 44bba6f3-5f82-4c9a-b4da-e33f23010ee3
 function update!(lu, gvf::GVF, o_t, x_t, a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
 	
@@ -257,13 +386,33 @@ function update!(lu, gvf::GVF, o_t, x_t, a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
 	update!(lu, gvf, x_t, x_tp1, ρ_t, c, γ_t, γ_tp1)
 end
 
-# ╔═╡ a69fed13-737d-4fd6-8baf-0dabe7f339a5
-function update!(lu, gvfs::Vector{G}, args...) where G<:GVF
-	# We should thunk here....
-	# @info gvfs
-	for i in 1:length(gvfs)
-		update!(lu, gvfs[i], args...)
+# ╔═╡ 3cff48e4-ad25-4354-8cdb-877586b33e96
+function MinimalRLCore.is_terminal(bdemon::BDemon, s_t, x_t)
+	get_value(bdemon.γ, s_t, x_t) == 0
+end
+
+# ╔═╡ 204234d7-212a-4985-a45d-1779286760e1
+function update!(
+	lu::Qλ, 
+	gvf::BDemon, 
+	o_t, x_t, 
+	a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
+	
+	# ρ_t = if gvf.π isa OnPolicy
+ #       	one(eltype(gvf.w))
+ #    else
+ #        get_value(gvf.π, o_t, a_t)/μ_t
+ #    end
+	
+    γ_t, γ_tp1 = if gvf.γ isa AbstractFloat
+        eltype(w)(gvf.γ)
+    else
+        get_value(gvf.γ, o_t, x_t), get_value(gvf.γ, o_tp1, x_tp1)
     end
+
+    c = get_value(gvf.c, o_tp1, x_tp1, p_tp1, r_tp1)
+
+	update!(lu, gvf, x_t, x_tp1, a_t, c, γ_t, γ_tp1)
 end
 
 # ╔═╡ 0bc9f5c5-6fb4-4874-8820-3345f50055e6
@@ -392,17 +541,17 @@ function FourRooms()
               	  0 0 0 0 0 1 0 0 0 0 0;
               	  0 0 0 0 0 0 0 0 0 0 0;
               	  0 0 0 0 0 1 0 0 0 0 0;]
-	BASE_WALLS = [0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;
-             	  0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;
-            	  0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;
-              	  0 0 0 0 0 0 0 0 0 0 0;]
+	# BASE_WALLS = [0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;
+ #             	  0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;
+ #            	  0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;
+ #              	  0 0 0 0 0 0 0 0 0 0 0;]
 	GridWithWalls(BASE_WALLS)
 end
 
@@ -460,8 +609,8 @@ function MinimalRLCore.environment_step!(
         next_state[2] -= 1
     end
 
-    next_state[1] = clamp(next_state[1], 1, size(env.walls)[1])
-    next_state[2] = clamp(next_state[2], 1, size(env.walls)[2])
+    next_state[1] = clamp(next_state[1], 1, size(env.walls, 1))
+    next_state[2] = clamp(next_state[2], 1, size(env.walls, 2))
     if is_wall(env, next_state)
         next_state = env.state
     end
@@ -508,6 +657,14 @@ function Base.show(io::IO, env::GridWithWalls)
 	for row in eachrow(model)
 		println(io, join(row, " "))
 	end
+end
+
+# ╔═╡ 34e7dfc9-1091-4852-8b38-12d366ec0a05
+let
+	env = FourRooms()
+	env.state = [1, 11]
+	step!(env, env.DOWN)
+	env
 end
 
 # ╔═╡ e2c6be01-f399-4acf-8b9a-4a89b9c3e6a3
@@ -704,6 +861,86 @@ function fourrooms_experiment(horde_init::Function, args...; kwargs...)
 	horde, p
 end
 
+# ╔═╡ 82a4c747-5f01-49d9-aad7-0cac78cc1784
+function fourrooms_behavior!(
+		bdemon, 
+		num_steps,
+		lu; kwargs...)
+
+	
+	env = FourRooms() #CycleWorld(env_size, partially_observable=false)
+
+	total_steps = 0
+	# @withprogress name="Steps" begin
+		while total_steps < num_steps
+			s_t = start!(env, Random.default_rng())
+			start!(bdemon, s_t)
+			while is_terminal(bdemon, s_t, s_t) == false
+				a_t = get_action(bdemon, s_t)
+				# @show a_t
+	
+				s_tp1, r_tp1, _ = MinimalRLCore.step!(env, a_t)
+				p_tp1 = predict(bdemon, s_tp1)
+				update!(lu, bdemon, s_t, s_t, a_t, nothing, s_tp1, s_tp1, r_tp1, p_tp1)
+	
+				total_steps += 1
+				s_t = copy(s_tp1)
+				# @logprogress total_steps/num_steps
+				# (is_terminal(bdemon, s_tp1, s_tp1) == false) || break
+				total_steps < num_steps || break
+			end
+			# bdemon.z .= 0
+		end
+	# end
+	# @info total_steps
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	p = [predict(bdemon, x) for x in 1:env_feat_size]
+	
+	p
+end
+
+# ╔═╡ c8b527c4-cdd7-4b42-9cec-5ab45b25fbc1
+function fourrooms_behavior_offpolicy!(
+		bdemon, 
+		num_steps,
+		lu; kwargs...)
+
+	
+	env = FourRooms() #CycleWorld(env_size, partially_observable=false)
+
+	total_steps = 0
+	while total_steps < num_steps
+		s_t = start!(env, Random.default_rng())
+		# while is_terminal(bdemon, s_t, s_t) == false
+			# a_t = get_action(bdemon, s_t)
+			a_t = rand(1:4)
+
+			s_tp1, r_tp1, _ = step!(env, a_t)
+			p_tp1 = predict(bdemon, s_tp1)
+			update!(lu, bdemon, s_t, s_t, a_t, nothing, s_tp1, s_tp1, r_tp1, p_tp1)
+
+			total_steps += 1
+			s_t = copy(s_tp1)
+			
+			# (is_terminal(bdemon, s_tp1, s_tp1) == false) || break
+			# total_steps < num_steps || break
+		# end
+		# bdemon.z .= 0
+	end
+	@info total_steps
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	p = [predict(bdemon, x) for x in 1:env_feat_size]
+	
+	p
+end
+
+# ╔═╡ 495b205a-8bc9-4c7a-943c-1921362cd296
+function fourrooms_heatmap_valuefunction(p::AbstractVector)
+	heatmap(reshape(p, 11, 11)[:, end:-1:1]')
+end
+
 # ╔═╡ 1746c4a8-7b2b-4187-825f-be978af4ace9
 fr_gamma_hrd, fr_gamma_p = let	
 	num_steps = 1000000
@@ -729,14 +966,14 @@ fr_gamma_hrd, fr_gamma_p = let
 end
 
 # ╔═╡ 5cfb16ca-463c-4119-8369-0c9742a3a8eb
-heatmap(reshape(getindex.(fr_gamma_p, 1), 11, 11))
+fourrooms_heatmap_valuefunction(getindex.(fr_gamma_p, 1))
 
 # ╔═╡ 44ae7ccf-fdd2-4f8a-b7c7-543d649d57fc
-heatmap(reshape(getindex.(fr_gamma_p, 9), 11, 11))
+fourrooms_heatmap_valuefunction(getindex.(fr_gamma_p, 9))
 
 # ╔═╡ 74a4a631-514a-4f74-82ff-ab68ddab4977
 fr_term_hrd, fr_term_p = let	
-	num_steps = 5000000
+	num_steps = 500000
 	lu = TDλ(0.01, 0.9)
 	γ = 0.9
 	env_size = size(FourRooms())
@@ -759,10 +996,125 @@ fr_term_hrd, fr_term_p = let
 end
 
 # ╔═╡ fcf6606f-8c16-4c27-8813-419cb53bf0e1
-heatmap(reshape(getindex.(fr_term_p, 1), 11, 11))
+fourrooms_heatmap_valuefunction(getindex.(fr_term_p, 1))
 
 # ╔═╡ 58f69245-65e8-4e8e-a63d-c2000e77fbd4
-heatmap(reshape(getindex.(fr_term_p, 11), 11, 11))
+fourrooms_heatmap_valuefunction(getindex.(fr_term_p, 11))
+
+# ╔═╡ 8fa48e9f-ef7e-4d99-a391-3b4268bd2ebe
+md"## Behavior Demon"
+
+# ╔═╡ fe0c2f4e-2ed9-4c62-928b-a617bd1a5e36
+_pred, fr_bdemon_11 = let
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	bdemon = BDemon(env_feat_size, 4, FeatureCumulant(11), ϵGreedy(0.1),
+	TerminatingDiscount(0.9, 11))
+	fourrooms_behavior!(bdemon, 1_000_000, Qλ(0.1, 0.9)), bdemon
+	# heatmap(reshape(getindex.(p, 1), 11, 11))
+	# @show bdemon.w
+end
+
+# ╔═╡ cc34f26e-b9d9-479b-a962-c98823244ebb
+fourrooms_heatmap_valuefunction(getindex.(_pred, 2))
+
+# ╔═╡ 8ae1ff0e-d129-4496-ae0e-e10ef0ec7d31
+fr_bd_hrd, fr_bd_p = let	
+	num_steps = 5_000_000
+	lu = TDλ(0.01, 0.9)
+	γ = 0.9
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	horde, p = fourrooms_experiment(num_steps, lu) do 
+		[[GVF(env_feat_size, 
+			FeatureCumulant(11),
+			fr_bdemon_11, 
+			# ConstantDiscount(γ))
+			TerminatingDiscount(γ, 11))
+		];
+		[GVF(env_feat_size, 
+			RescaleCumulant(
+				PredictionCumulant(i), 
+				γ),
+			fr_bdemon_11, 
+			# ConstantDiscount(γ))
+			TerminatingDiscount(γ, 11))
+			for i in 1:11]]
+	end
+	horde, p
+end
+
+# ╔═╡ 8665d2ad-e5bc-417e-b347-8a01fa90ce93
+fourrooms_heatmap_valuefunction(getindex.(fr_bd_p, 1))
+
+# ╔═╡ d569bb78-a691-4da7-8429-d5a29e2c57a0
+let
+	p = getindex.(fr_bd_p, 4)
+	surface(reshape(p, 11, 11)[:, end:-1:1])
+end
+
+# ╔═╡ 9d4bc54c-2c4a-463c-86c5-bf43ecc2aafc
+fr_comp_bdemon_p, fr_comp_bdemon = let	
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	bdemon = BDemon(
+		env_feat_size, 
+		4, 
+		GVFCumulant(fr_bd_hrd[4]),
+		# FeatureCumulant(11), 
+		ϵGreedy(0.1),
+		GVFThreshTerminatingDiscount(0.9, fr_bd_hrd[4], 0.22))
+	
+	fourrooms_behavior_offpolicy!(bdemon, 1000000, Qλ(0.1, 0.9)), bdemon
+	
+	# num_steps = 50_000_000
+	# lu = TDλ(0.01, 0.9)
+	# γ = 0.0
+	# env_size = size(FourRooms())
+	# env_feat_size = env_size[1] * env_size[2] 
+	# horde, p = fourrooms_experiment(num_steps, lu) do 
+	# 	[[GVF(env_feat_size, 
+	# 		FeatureCumulant(11),
+	# 		fr_bdemon_11, 
+	# 		# ConstantDiscount(γ))
+	# 		TerminatingDiscount(γ, 11))
+	# 	];
+	# 	[GVF(env_feat_size, 
+	# 		PredictionCumulant(i), 
+	# 		fr_bdemon_11, 
+	# 		# ConstantDiscount(γ))
+	# 		TerminatingDiscount(γ, 11))
+	# 		for i in 1:5]]
+	# end
+	# horde, p
+end
+
+# ╔═╡ ea8732c0-0b2c-4ebc-a206-74a253c6c6d4
+# fr_bd_myopic_hrd, fr_bd_myopic_p = let	
+# 	num_steps = 50_000_000
+# 	lu = TDλ(0.01, 0.9)
+# 	γ = 0.0
+# 	env_size = size(FourRooms())
+# 	env_feat_size = env_size[1] * env_size[2] 
+# 	horde, p = fourrooms_experiment(num_steps, lu) do 
+# 		[[GVF(env_feat_size, 
+# 			FeatureCumulant(11),
+# 			fr_bdemon_11, 
+# 			# ConstantDiscount(γ))
+# 			TerminatingDiscount(γ, 11))
+# 		];
+# 		[GVF(env_feat_size, 
+# 			PredictionCumulant(i), 
+# 			fr_bdemon_11, 
+# 			# ConstantDiscount(γ))
+# 			TerminatingDiscount(γ, 11))
+# 			for i in 1:5]]
+# 	end
+# 	horde, p
+# end
+
+# ╔═╡ ff876ea8-dc3e-4479-a246-65d16b5b85e2
+fourrooms_heatmap_valuefunction(getindex.(fr_comp_bdemon_p, 1))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1792,6 +2144,8 @@ version = "1.4.1+0"
 # ╠═3527021b-de33-42da-aac0-619483caba3e
 # ╠═713bdb3f-7afe-4215-9191-b7704383c6b0
 # ╠═73ae37d9-2a85-4e3b-b2b0-29b9b0cbc029
+# ╠═5e6ded46-1ff1-4667-966c-7e2bd4a35945
+# ╠═349185f3-855d-40b7-a669-8468e0bb686c
 # ╠═b8130b16-52c9-42e2-8e87-03e047547809
 # ╠═2756de72-2851-43cd-a058-da96d294b70c
 # ╠═0939ea40-1170-4269-9e6e-6ba5a0c80d72
@@ -1801,6 +2155,8 @@ version = "1.4.1+0"
 # ╠═2e621539-afc9-4306-8f2b-d418099f5a34
 # ╠═7bbe957e-0669-42e5-9384-e31fc31f8283
 # ╠═c2a35607-bf5c-441f-a708-53f32101f33e
+# ╠═51e69bed-bf48-4688-87fd-d0c9e9bfc34e
+# ╠═fa854b1a-a28c-4a28-b8e4-3e03a4a99810
 # ╟─6481cbd3-7ae0-4adc-b7bd-d4fa1957defa
 # ╠═d6e1b5c1-568d-43d5-a90f-dd0dd3c907f7
 # ╠═0ba53300-2ff7-4c59-b7c9-d9896ed497af
@@ -1811,10 +2167,25 @@ version = "1.4.1+0"
 # ╠═b4c75f1b-fbc5-4370-8241-f51e7865fcdd
 # ╠═7b3b895a-4563-42be-8d4f-5cb9dd53a6d7
 # ╠═32c22f6c-02b2-4064-9b79-eeed1bb975ce
-# ╠═0398417f-db77-4ec7-b385-9f3206a5365c
-# ╠═47eba562-99e0-4815-a028-21f7376cd257
+# ╟─0398417f-db77-4ec7-b385-9f3206a5365c
+# ╟─47eba562-99e0-4815-a028-21f7376cd257
 # ╠═44bba6f3-5f82-4c9a-b4da-e33f23010ee3
 # ╠═a69fed13-737d-4fd6-8baf-0dabe7f339a5
+# ╠═356c80aa-d825-45dc-8708-cf7ad6ede14f
+# ╠═217a9a10-1b57-4d4a-8b41-eeaea71c749f
+# ╠═5001c4a2-343d-4f5e-a2e4-4e01750932e9
+# ╠═695fd511-5f59-4e77-8b26-5e3787dbc198
+# ╠═708a85fd-9b52-420b-a468-f8b4129ce794
+# ╠═ba9085c6-cecb-4ea5-8f3d-0ed21a23c196
+# ╠═cda934f1-08f7-460a-b4b2-c9c20ade52a4
+# ╠═3cff48e4-ad25-4354-8cdb-877586b33e96
+# ╠═660e8864-012f-4347-abf0-777d8c20aecd
+# ╠═6733a1bb-88bd-4e01-9a03-dd39279ba1e7
+# ╠═33db32af-2e34-4dad-abcc-e023349aae70
+# ╠═3bffcae1-1570-4d9f-814a-702afd51d3e4
+# ╠═204234d7-212a-4985-a45d-1779286760e1
+# ╠═a351143c-a221-4c44-94a6-249308c38a11
+# ╠═55a73859-6da8-4d4f-a391-a9bf63a2f98c
 # ╟─0bc9f5c5-6fb4-4874-8820-3345f50055e6
 # ╟─dd006581-f89c-426c-9ade-7f7edb58dc88
 # ╠═981a4a12-8f59-4d8a-b734-1993280959e6
@@ -1845,6 +2216,7 @@ version = "1.4.1+0"
 # ╠═992f3a2d-a942-4d72-8f7d-c37f904e915f
 # ╠═983c6296-db06-419c-81ed-eac04fa4db75
 # ╠═b06785ff-c044-4873-87b8-b9d4d977bf88
+# ╠═34e7dfc9-1091-4852-8b38-12d366ec0a05
 # ╠═e2c6be01-f399-4acf-8b9a-4a89b9c3e6a3
 # ╟─1c793c5e-a2d6-4160-b672-281017b6aeae
 # ╠═6f50c308-4f63-42f1-a80c-0bbbe09f5632
@@ -1858,11 +2230,23 @@ version = "1.4.1+0"
 # ╠═2faab55b-74b0-4e6f-b36b-a85eceb17c87
 # ╠═a4cb5611-2572-47da-8a74-ad475c0e222e
 # ╠═ab8035d2-3d55-4d82-b078-65a866bdebe0
+# ╠═82a4c747-5f01-49d9-aad7-0cac78cc1784
+# ╠═c8b527c4-cdd7-4b42-9cec-5ab45b25fbc1
+# ╠═495b205a-8bc9-4c7a-943c-1921362cd296
 # ╠═1746c4a8-7b2b-4187-825f-be978af4ace9
 # ╠═5cfb16ca-463c-4119-8369-0c9742a3a8eb
 # ╠═44ae7ccf-fdd2-4f8a-b7c7-543d649d57fc
 # ╠═74a4a631-514a-4f74-82ff-ab68ddab4977
 # ╠═fcf6606f-8c16-4c27-8813-419cb53bf0e1
 # ╠═58f69245-65e8-4e8e-a63d-c2000e77fbd4
+# ╠═8fa48e9f-ef7e-4d99-a391-3b4268bd2ebe
+# ╠═fe0c2f4e-2ed9-4c62-928b-a617bd1a5e36
+# ╠═cc34f26e-b9d9-479b-a962-c98823244ebb
+# ╠═8ae1ff0e-d129-4496-ae0e-e10ef0ec7d31
+# ╠═8665d2ad-e5bc-417e-b347-8a01fa90ce93
+# ╠═d569bb78-a691-4da7-8429-d5a29e2c57a0
+# ╠═9d4bc54c-2c4a-463c-86c5-bf43ecc2aafc
+# ╠═ea8732c0-0b2c-4ebc-a206-74a253c6c6d4
+# ╠═ff876ea8-dc3e-4479-a246-65d16b5b85e2
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
