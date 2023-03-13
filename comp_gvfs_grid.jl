@@ -16,6 +16,12 @@ using PlutoUI, ProgressLogging
 # ╔═╡ 94b20a16-cccf-4512-967d-77261222544b
 using Plots
 
+# ╔═╡ 2bf20b76-74e2-42b2-8053-fa66657c5563
+using RecipesBase, Colors
+
+# ╔═╡ 3b85f9cd-f9aa-47ac-852d-ed7839167790
+using Statistics
+
 # ╔═╡ e09f74b0-fff2-4417-8867-f05f47c6a055
 PlutoUI.TableOfContents(title="Comp-GVFS", indent=true, aside=true)
 
@@ -166,6 +172,14 @@ struct GVFThreshTerminatingDiscount{F, G<:GVF}
 	θ::Float64
 end
 
+# ╔═╡ d135f4fe-8700-4a60-acec-890a9dc562fc
+mutable struct GVFThreshTerminatingMaxDiscount{F, G<:GVF}
+	γ::F
+	gvf::G
+	θ::Float64
+	GVFThreshTerminatingMaxDiscount(γ, gvf) = new{typeof(γ), typeof(gvf)}(γ, gvf, -Inf)
+end
+
 # ╔═╡ 0ba53300-2ff7-4c59-b7c9-d9896ed497af
 predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{<:Number}) = 
 	dot(gvf.w, x)
@@ -234,15 +248,16 @@ end
 findall(==(maximum([1, 1, 0, 0])), [1, 1, 0, 0])
 
 # ╔═╡ 708a85fd-9b52-420b-a468-f8b4129ce794
-function get_action(π::ϵGreedy, q)
+function get_action(rng::Random.AbstractRNG, π::ϵGreedy, q)
 	if rand() < π.ϵ
-		rand(1:length(q))
+		rand(rng, 1:length(q))
 	else
-		rand(findall(==(maximum(q)), q))
-		
-		# argmax(q)
+		rand(rng, findall(==(maximum(q)), q))
 	end
 end
+
+# ╔═╡ f7405d98-10e9-4e2e-ac13-1780dc6c5446
+get_action(π, q) = get_action(Random.default_rng(), π, q)
 
 # ╔═╡ ba9085c6-cecb-4ea5-8f3d-0ed21a23c196
 mutable struct BDemon{W, C, Π, Γ}
@@ -276,8 +291,23 @@ get_value(gvfc::GVFCumulant, o, x, p, r) =
 
 # ╔═╡ fa854b1a-a28c-4a28-b8e4-3e03a4a99810
 get_value(fc::GVFThreshTerminatingDiscount, o, x::Int) = begin
+	# if predict(fc.gvf, x) > fc.θ
+	# 	# @info "terminante"
+	# end
 	predict(fc.gvf, x) > fc.θ ? zero(typeof(fc.γ)) : fc.γ
 	# fc.idx == x ? zero(typeof(fc.γ)) : fc.γ
+end
+
+# ╔═╡ 26a2fd60-0812-404b-a1d5-145a24d6fe35
+get_value(fc::GVFThreshTerminatingMaxDiscount, o, x::Int) = begin
+	pred = predict(fc.gvf, x)
+	if pred > fc.θ || pred ≈ fc.θ
+		# @info "terminate"
+		fc.θ = pred
+		return zero(typeof(fc.γ))
+	else
+		return fc.γ
+	end
 end
 
 # ╔═╡ 0398417f-db77-4ec7-b385-9f3206a5365c
@@ -329,6 +359,11 @@ end
 # ╔═╡ 660e8864-012f-4347-abf0-777d8c20aecd
 function get_action(demon::BDemon, x_t)
 	get_action(demon.π, predict(demon, x_t))
+end
+
+# ╔═╡ 1b9ec5be-ca0f-4221-abf1-17f44b5ba118
+function get_action(rng::Random.AbstractRNG, demon::BDemon, x_t)
+	get_action(rng, demon.π, predict(demon, x_t))
 end
 
 # ╔═╡ 3bffcae1-1570-4d9f-814a-702afd51d3e4
@@ -568,7 +603,10 @@ is_wall(env::GridWithWalls, state) = env.walls[state[1], state[2]] == 1
 Base.size(env::GridWithWalls, args...) = size(env.walls, args...)
 
 # ╔═╡ 9b9bc9ae-5ea5-4f1d-afaf-7d4d20b2baf5
-MinimalRLCore.get_state(env::GridWithWalls) = (env.state[1] - 1) * size(env, 1) + env.state[2]
+MinimalRLCore.get_state(env::GridWithWalls, state = env.state) = begin
+	# @info state
+	(state[1] - 1) * size(env, 1) + state[2]
+end
 
 # ╔═╡ 6bc7973a-98a2-40dd-8a2d-aa27887c8fa1
 random_state(env::GridWithWalls, rng) = [rand(rng, 1:size(env.walls)[1]), rand(rng, 1:size(env.walls)[2])]
@@ -633,8 +671,8 @@ function _step(env::GridWithWalls, state, action, rng, kwargs...)
         next_state[2] -= 1
     end
 
-    next_state[1] = clamp(next_state[1], 1, size(env.walls)[1])
-    next_state[2] = clamp(next_state[2], 1, size(env.walls)[2])
+    next_state[1] = clamp(next_state[1], 1, size(env.walls, 1))
+    next_state[2] = clamp(next_state[2], 1, size(env.walls, 2))
     if is_wall(env, next_state)
         next_state = state
     end
@@ -659,6 +697,169 @@ function Base.show(io::IO, env::GridWithWalls)
 	end
 end
 
+# ╔═╡ 69644819-7549-43ed-ba0e-912e18fdc2c8
+@recipe function f(env::GridWithWalls)
+    ticks := nothing
+    foreground_color_border := nothing
+    grid := false
+    legend := false
+    aspect_ratio := 1
+    xaxis := false
+    yaxis := false
+    yflip := false
+	addagent --> true
+
+    SIZE=100
+    BG = Colors.RGB(1.0, 1.0, 1.0)
+    BORDER = Colors.RGB(0.0, 0.0, 0.0)
+    WALL = Colors.RGB(0.3, 0.3, 0.3)
+    AC = Colors.RGB(0.69921875, 0.10546875, 0.10546875)
+    GOAL = Colors.RGB(0.796875, 0.984375, 0.76953125)
+
+    cell = fill(BG, SIZE, SIZE)
+    cell[1, :] .= BORDER
+    cell[end, :] .= BORDER
+    cell[:, 1] .= BORDER
+    cell[:, end] .= BORDER
+
+	wall_cell = fill(WALL, SIZE, SIZE)
+    wall_cell[1, :] .= BORDER
+    wall_cell[end, :] .= BORDER
+    wall_cell[:, 1] .= BORDER
+    wall_cell[:, end] .= BORDER
+
+
+    s_y = size(env.walls, 1)
+    s_x = size(env.walls, 2)
+
+    screen = fill(BG, (s_y + 2)*SIZE, (s_x + 2)*SIZE)
+
+    screen[:, 1:SIZE] .= WALL
+    screen[1:SIZE, :] .= WALL
+    screen[end-(SIZE-1):end, :] .= WALL
+    screen[:, end-(SIZE-1):end] .= WALL
+
+    for j ∈ 1:s_x
+        for i ∈ 1:s_y
+            sqr_i = ((i)*SIZE + 1):((i+1)*SIZE)
+            sqr_j = ((j)*SIZE + 1):((j+1)*SIZE)
+            if env.state[1] == i && env.state[2] == j
+				if plotattributes[:addagent]
+	                v = @view screen[sqr_i, sqr_j]
+                	v .= cell
+                	v[Int(SIZE/2)-Int(SIZE/4):Int(SIZE/2)+Int(SIZE/4)+1, 
+					  Int(SIZE/2)-Int(SIZE/4):Int(SIZE/2)+Int(SIZE/4)+1] .= AC
+				end
+			elseif env.walls[i, j]
+                screen[sqr_i, sqr_j] .= wall_cell
+			elseif !env.walls[i, j]
+                screen[sqr_i, sqr_j] .= cell
+            end
+        end
+    end
+    screen[end:-1:1,:]
+end
+
+# ╔═╡ 23185969-603e-452b-a3ab-ae624c7b539e
+@recipe function f(env::GridWithWalls, bdemon::BDemon)
+    ticks := nothing
+    foreground_color_border := nothing
+    grid := false
+    legend := false
+    aspect_ratio := 1
+    xaxis := false
+    yaxis := false
+    yflip := false
+
+    SIZE=100
+
+	@series begin
+		addagent := false
+		env
+	end
+
+	s_y = size(env.walls, 1)
+    s_x = size(env.walls, 2)
+
+	q_x = Float64[]
+	q_y = Float64[]
+	q_u = Float64[]
+	q_v = Float64[]
+
+	colors = Symbol[]
+	
+	for j ∈ 1:s_x
+        for i ∈ 1:s_y
+			if !env.walls[i, j]
+				sqr_i = ((s_y - (i-2))*SIZE + 1):-1:((s_y - (i-1))*SIZE)
+            	sqr_j = ((j)*SIZE + 1):((j+1)*SIZE)	
+				med_sqr_i = median(sqr_i)
+				med_sqr_j = median(sqr_j)
+				
+				q = predict(bdemon, MinimalRLCore.get_state(env, (i, j)))
+				actions = findall((x)->x≈maximum(q), q)
+				# @info maximum(q)
+				for a in actions
+					if a == env.UP
+						# @info q, med_sqr_j, med_sqr_i
+						push!(q_x, med_sqr_j)
+						push!(q_y, med_sqr_i + 1)
+						push!(q_u, 0)
+						push!(q_v, 1*SIZE/2 - 6)
+						push!(colors, :orange)
+					elseif a == env.DOWN
+						push!(q_x, med_sqr_j)
+						push!(q_y, med_sqr_i - 1)
+						push!(q_u, 0)
+						push!(q_v, -1*SIZE/2 + 6)
+						push!(colors, :red)
+					elseif a == env.RIGHT
+						push!(q_x, med_sqr_j + 1)
+						push!(q_y, med_sqr_i)
+						push!(q_u, 1*SIZE/2 - 6)
+						push!(q_v, 0)
+						push!(colors, :yellow)
+					elseif a == env.LEFT
+						push!(q_x, med_sqr_j - 1)
+						push!(q_y, med_sqr_i)
+						push!(q_u,  -1*SIZE/2 + 6)
+						push!(q_v, 0)
+						push!(colors, :blue)
+					end
+				end
+			end
+		end
+	end
+
+	@series begin
+		seriestype := :quiver
+		arrow := true
+		c := :black
+		# c := repeat(colors, inner=4)
+		# seriescolor := repeat(colors, inner=4)
+		# markercolor := repeat(colors, inner=4)
+		# linecolor := repeat(colors, inner=4)
+		# c := repeat(colors, inner=4)
+		# line_z := repeat(colors, inner=4)
+		linewidth := 2
+		label := ""
+		gradient := (q_u, q_v)
+		q_x, q_y
+	end
+	
+end
+
+# ╔═╡ 8bf4d4aa-3899-4cf0-b5e1-22db7f1a97a8
+gr()
+
+# ╔═╡ f9b6c7ac-f243-46da-9533-5acb7faaa861
+let
+	env = FourRooms()
+	env.state = [1, 11]
+	step!(env, env.DOWN)
+	plot(env)
+end
+
 # ╔═╡ 34e7dfc9-1091-4852-8b38-12d366ec0a05
 let
 	env = FourRooms()
@@ -666,6 +867,9 @@ let
 	step!(env, env.DOWN)
 	env
 end
+
+# ╔═╡ 60648ab1-27f8-4fbc-abd6-d26f25522151
+
 
 # ╔═╡ e2c6be01-f399-4acf-8b9a-4a89b9c3e6a3
 # function which_room(env::GridWithWalls, state)
@@ -771,7 +975,7 @@ md"# Myopic Chain"
 
 # ╔═╡ 7d5013b6-c0a7-452a-8e06-2ea5c21c1788
 let
-	plotly()
+	# plotly()
 	horde = cw_myopic_hrd
 	num_iterations = 4
 	p = [predict(horde, [x]) for x in [reduce(vcat, fill(1:10, num_iterations)); [1, 2]]]
@@ -831,19 +1035,22 @@ end
 function fourrooms_experiment!(
 		horde, 
 		num_steps,
-		lu = TDλ(0.1, 0.9); kwargs...)
+		lu = TDλ(0.1, 0.9); seed = 1, kwargs...)
 
+	rng = Random.Xoshiro(seed)
 	
 	env = FourRooms() #CycleWorld(env_size, partially_observable=false)
 	
-	s_t = start!(env, Random.default_rng())
+	s_t = start!(env, rng)
 	
 	@progress for step in 1:num_steps
 
-		a_t = rand(env.ACTIONS)
+		a_t = rand(rng, env.ACTIONS)
 		s_tp1, r_tp1, _ = step!(env, a_t)
 		p_tp1 = predict(horde, s_tp1)
-		update!(lu, horde, s_t, s_t, a_t, 1/length(env.ACTIONS), s_tp1, s_tp1, r_tp1, p_tp1)
+		update!(lu, horde, s_t, s_t, a_t, 
+			1/length(env.ACTIONS), s_tp1, s_tp1, 
+			r_tp1, p_tp1)
 
 		s_t = copy(s_tp1)
 	end
@@ -865,34 +1072,30 @@ end
 function fourrooms_behavior!(
 		bdemon, 
 		num_steps,
-		lu; kwargs...)
+		lu; seed = 1, kwargs...)
 
+	rng = Random.Xoshiro(seed)
 	
 	env = FourRooms() #CycleWorld(env_size, partially_observable=false)
 
 	total_steps = 0
-	# @withprogress name="Steps" begin
-		while total_steps < num_steps
-			s_t = start!(env, Random.default_rng())
-			start!(bdemon, s_t)
-			while is_terminal(bdemon, s_t, s_t) == false
-				a_t = get_action(bdemon, s_t)
-				# @show a_t
-	
-				s_tp1, r_tp1, _ = MinimalRLCore.step!(env, a_t)
-				p_tp1 = predict(bdemon, s_tp1)
-				update!(lu, bdemon, s_t, s_t, a_t, nothing, s_tp1, s_tp1, r_tp1, p_tp1)
-	
-				total_steps += 1
-				s_t = copy(s_tp1)
-				# @logprogress total_steps/num_steps
-				# (is_terminal(bdemon, s_tp1, s_tp1) == false) || break
-				total_steps < num_steps || break
-			end
-			# bdemon.z .= 0
+
+	while total_steps < num_steps
+		s_t = start!(env, rng)
+		start!(bdemon, s_t)
+		while is_terminal(bdemon, s_t, s_t) == false
+			a_t = get_action(rng, bdemon, s_t)
+
+			s_tp1, r_tp1, _ = MinimalRLCore.step!(env, a_t)
+			p_tp1 = predict(bdemon, s_tp1)
+			update!(lu, bdemon, s_t, s_t, a_t, nothing, s_tp1, s_tp1, r_tp1, p_tp1)
+
+			total_steps += 1
+			s_t = copy(s_tp1)
+			total_steps < num_steps || break
 		end
-	# end
-	# @info total_steps
+		# bdemon.z .= 0
+	end
 	env_size = size(FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	p = [predict(bdemon, x) for x in 1:env_feat_size]
@@ -941,9 +1144,15 @@ function fourrooms_heatmap_valuefunction(p::AbstractVector)
 	heatmap(reshape(p, 11, 11)[:, end:-1:1]')
 end
 
+# ╔═╡ 94e12aa5-fcd8-4656-a7c0-3c09f1c6dbd1
+function fourrooms_plot_policy(policy::AbstractVector)
+	# heatmap(reshape(p, 11, 11)[:, end:-1:1]')
+	
+end
+
 # ╔═╡ 1746c4a8-7b2b-4187-825f-be978af4ace9
 fr_gamma_hrd, fr_gamma_p = let	
-	num_steps = 1000000
+	num_steps = 3_000_000
 	lu = TDλ(0.1, 0.9)
 	γ = 0.9
 	env_size = size(FourRooms())
@@ -956,29 +1165,31 @@ fr_gamma_hrd, fr_gamma_p = let
 			# TerminatingDiscount(γ, 11))
 		];
 		[GVF(env_feat_size, 
-			PredictionCumulant(i), 
+			RescaleCumulant(
+				PredictionCumulant(i), 
+				γ),
 			OnPolicy(), 
 			ConstantDiscount(γ))
 			# TerminatingDiscount(γ, 11)) 
-			for i in 1:9]]
+			for i in 1:20]]
 	end
 	horde, p
 end
 
 # ╔═╡ 5cfb16ca-463c-4119-8369-0c9742a3a8eb
-fourrooms_heatmap_valuefunction(getindex.(fr_gamma_p, 1))
+fourrooms_heatmap_valuefunction(getindex.(fr_gamma_p, 10))
 
 # ╔═╡ 44ae7ccf-fdd2-4f8a-b7c7-543d649d57fc
-fourrooms_heatmap_valuefunction(getindex.(fr_gamma_p, 9))
+fourrooms_heatmap_valuefunction(getindex.(fr_gamma_p, 20))
 
 # ╔═╡ 74a4a631-514a-4f74-82ff-ab68ddab4977
-fr_term_hrd, fr_term_p = let	
-	num_steps = 500000
+fr_term_hrd, fr_term_p = let
+	num_steps = 1_000_000
 	lu = TDλ(0.01, 0.9)
 	γ = 0.9
 	env_size = size(FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
-	horde, p = fourrooms_experiment(num_steps, TDλ(0.1, 0.9)) do 
+	horde, p = fourrooms_experiment(num_steps, TDλ(0.01, 0.9)) do 
 		[[GVF(env_feat_size, 
 			FeatureCumulant(11), 
 			OnPolicy(), 
@@ -999,28 +1210,32 @@ end
 fourrooms_heatmap_valuefunction(getindex.(fr_term_p, 1))
 
 # ╔═╡ 58f69245-65e8-4e8e-a63d-c2000e77fbd4
-fourrooms_heatmap_valuefunction(getindex.(fr_term_p, 11))
+fourrooms_heatmap_valuefunction(getindex.(fr_term_p, 2))
 
 # ╔═╡ 8fa48e9f-ef7e-4d99-a391-3b4268bd2ebe
 md"## Behavior Demon"
 
 # ╔═╡ fe0c2f4e-2ed9-4c62-928b-a617bd1a5e36
-_pred, fr_bdemon_11 = let
+fr_bdeomon_11_pred, fr_bdemon_11 = let
 	env_size = size(FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	bdemon = BDemon(env_feat_size, 4, FeatureCumulant(11), ϵGreedy(0.1),
 	TerminatingDiscount(0.9, 11))
 	fourrooms_behavior!(bdemon, 1_000_000, Qλ(0.1, 0.9)), bdemon
-	# heatmap(reshape(getindex.(p, 1), 11, 11))
-	# @show bdemon.w
 end
 
+# ╔═╡ fb0edc00-0d2f-478c-ab8d-7d61f399b465
+plot(FourRooms(), fr_bdemon_11)
+
+# ╔═╡ a2634068-2f4d-4986-9d2d-f3e8bf729c4c
+plot(FourRooms(), fr_bdemon_11)
+
 # ╔═╡ cc34f26e-b9d9-479b-a962-c98823244ebb
-fourrooms_heatmap_valuefunction(getindex.(_pred, 2))
+fourrooms_heatmap_valuefunction(getindex.(fr_bdeomon_11_pred, 1))
 
 # ╔═╡ 8ae1ff0e-d129-4496-ae0e-e10ef0ec7d31
 fr_bd_hrd, fr_bd_p = let	
-	num_steps = 5_000_000
+	num_steps = 2_000_000
 	lu = TDλ(0.01, 0.9)
 	γ = 0.9
 	env_size = size(FourRooms())
@@ -1045,13 +1260,7 @@ fr_bd_hrd, fr_bd_p = let
 end
 
 # ╔═╡ 8665d2ad-e5bc-417e-b347-8a01fa90ce93
-fourrooms_heatmap_valuefunction(getindex.(fr_bd_p, 1))
-
-# ╔═╡ d569bb78-a691-4da7-8429-d5a29e2c57a0
-let
-	p = getindex.(fr_bd_p, 4)
-	surface(reshape(p, 11, 11)[:, end:-1:1])
-end
+fourrooms_heatmap_valuefunction(getindex.(fr_bd_p, 4))
 
 # ╔═╡ 9d4bc54c-2c4a-463c-86c5-bf43ecc2aafc
 fr_comp_bdemon_p, fr_comp_bdemon = let	
@@ -1063,73 +1272,72 @@ fr_comp_bdemon_p, fr_comp_bdemon = let
 		GVFCumulant(fr_bd_hrd[4]),
 		# FeatureCumulant(11), 
 		ϵGreedy(0.1),
-		GVFThreshTerminatingDiscount(0.9, fr_bd_hrd[4], 0.22))
+		GVFThreshTerminatingDiscount(0.9, fr_bd_hrd[4], 0.23))
 	
-	fourrooms_behavior_offpolicy!(bdemon, 1000000, Qλ(0.1, 0.9)), bdemon
-	
-	# num_steps = 50_000_000
-	# lu = TDλ(0.01, 0.9)
-	# γ = 0.0
-	# env_size = size(FourRooms())
-	# env_feat_size = env_size[1] * env_size[2] 
-	# horde, p = fourrooms_experiment(num_steps, lu) do 
-	# 	[[GVF(env_feat_size, 
-	# 		FeatureCumulant(11),
-	# 		fr_bdemon_11, 
-	# 		# ConstantDiscount(γ))
-	# 		TerminatingDiscount(γ, 11))
-	# 	];
-	# 	[GVF(env_feat_size, 
-	# 		PredictionCumulant(i), 
-	# 		fr_bdemon_11, 
-	# 		# ConstantDiscount(γ))
-	# 		TerminatingDiscount(γ, 11))
-	# 		for i in 1:5]]
-	# end
-	# horde, p
+	fourrooms_behavior_offpolicy!(bdemon, 500_000, Qλ(0.01, 0.9)), bdemon
 end
-
-# ╔═╡ ea8732c0-0b2c-4ebc-a206-74a253c6c6d4
-# fr_bd_myopic_hrd, fr_bd_myopic_p = let	
-# 	num_steps = 50_000_000
-# 	lu = TDλ(0.01, 0.9)
-# 	γ = 0.0
-# 	env_size = size(FourRooms())
-# 	env_feat_size = env_size[1] * env_size[2] 
-# 	horde, p = fourrooms_experiment(num_steps, lu) do 
-# 		[[GVF(env_feat_size, 
-# 			FeatureCumulant(11),
-# 			fr_bdemon_11, 
-# 			# ConstantDiscount(γ))
-# 			TerminatingDiscount(γ, 11))
-# 		];
-# 		[GVF(env_feat_size, 
-# 			PredictionCumulant(i), 
-# 			fr_bdemon_11, 
-# 			# ConstantDiscount(γ))
-# 			TerminatingDiscount(γ, 11))
-# 			for i in 1:5]]
-# 	end
-# 	horde, p
-# end
 
 # ╔═╡ ff876ea8-dc3e-4479-a246-65d16b5b85e2
 fourrooms_heatmap_valuefunction(getindex.(fr_comp_bdemon_p, 1))
 
+# ╔═╡ 8763f124-96b4-47de-bd33-bfd7b391e056
+plot(FourRooms(), fr_comp_bdemon)
+
+# ╔═╡ df9a9c7a-24ad-449c-9744-8e13d31e94c5
+fr_comp_bdemon_max_p, fr_comp_bdemon_max = let	
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	bdemon = BDemon(
+		env_feat_size, 
+		4, 
+		GVFCumulant(fr_bd_hrd[4]),
+		# FeatureCumulant(11), 
+		ϵGreedy(0.1),
+		GVFThreshTerminatingMaxDiscount(0.9, fr_bd_hrd[4]))
+	
+	fourrooms_behavior_offpolicy!(bdemon, 500_000, Qλ(0.01, 0.9)), bdemon
+end
+
+# ╔═╡ 677e1b65-0a5b-4d40-b083-7a3f84692672
+fourrooms_heatmap_valuefunction(getindex.(fr_comp_bdemon_max_p, 4))
+
+# ╔═╡ 53c46316-3fa9-4e52-be60-862d58e31081
+fr_comp_bdemon_11_p, fr_comp_bdemon_11 = let	
+	env_size = size(FourRooms())
+	env_feat_size = env_size[1] * env_size[2] 
+	bdemon = BDemon(
+		env_feat_size, 
+		4, 
+		GVFCumulant(fr_bd_hrd[11]),
+		# FeatureCumulant(11), 
+		ϵGreedy(0.1),
+		GVFThreshTerminatingDiscount(0.9, fr_bd_hrd[4], 0.225))
+	
+	fourrooms_behavior_offpolicy!(bdemon, 200_000, Qλ(0.01, 0.9)), bdemon
+end
+
+# ╔═╡ 89bb8312-734b-4800-8bfd-93fbee37052b
+fourrooms_heatmap_valuefunction(getindex.(fr_comp_bdemon_11_p, 1))
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 MinimalRLCore = "4557a151-568a-41c4-844f-9d8069264cea"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
+Colors = "~0.12.10"
 MinimalRLCore = "~0.2.1"
 Plots = "~1.38.6"
 PlutoUI = "~0.7.50"
 ProgressLogging = "~0.1.4"
+RecipesBase = "~1.3.3"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -1138,7 +1346,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "6a32e546fa298cafac8b4624325a79e3a3942a2e"
+project_hash = "6f7f4a5fefb88827acee40faa1d93754677fb371"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -2127,6 +2335,8 @@ version = "1.4.1+0"
 # ╠═f6a92f82-be00-11ed-14fc-450478eca211
 # ╠═fd86d35c-9433-4e68-88b8-078c56bcf2a4
 # ╠═94b20a16-cccf-4512-967d-77261222544b
+# ╠═2bf20b76-74e2-42b2-8053-fa66657c5563
+# ╠═3b85f9cd-f9aa-47ac-852d-ed7839167790
 # ╠═e09f74b0-fff2-4417-8867-f05f47c6a055
 # ╟─a155572b-9273-491d-bcbe-9540efd09081
 # ╟─4dab38f3-a07f-46e5-8bcd-26132c65ca43
@@ -2157,6 +2367,8 @@ version = "1.4.1+0"
 # ╠═c2a35607-bf5c-441f-a708-53f32101f33e
 # ╠═51e69bed-bf48-4688-87fd-d0c9e9bfc34e
 # ╠═fa854b1a-a28c-4a28-b8e4-3e03a4a99810
+# ╠═d135f4fe-8700-4a60-acec-890a9dc562fc
+# ╠═26a2fd60-0812-404b-a1d5-145a24d6fe35
 # ╟─6481cbd3-7ae0-4adc-b7bd-d4fa1957defa
 # ╠═d6e1b5c1-568d-43d5-a90f-dd0dd3c907f7
 # ╠═0ba53300-2ff7-4c59-b7c9-d9896ed497af
@@ -2176,10 +2388,12 @@ version = "1.4.1+0"
 # ╠═5001c4a2-343d-4f5e-a2e4-4e01750932e9
 # ╠═695fd511-5f59-4e77-8b26-5e3787dbc198
 # ╠═708a85fd-9b52-420b-a468-f8b4129ce794
+# ╠═f7405d98-10e9-4e2e-ac13-1780dc6c5446
 # ╠═ba9085c6-cecb-4ea5-8f3d-0ed21a23c196
 # ╠═cda934f1-08f7-460a-b4b2-c9c20ade52a4
 # ╠═3cff48e4-ad25-4354-8cdb-877586b33e96
 # ╠═660e8864-012f-4347-abf0-777d8c20aecd
+# ╠═1b9ec5be-ca0f-4221-abf1-17f44b5ba118
 # ╠═6733a1bb-88bd-4e01-9a03-dd39279ba1e7
 # ╠═33db32af-2e34-4dad-abcc-e023349aae70
 # ╠═3bffcae1-1570-4d9f-814a-702afd51d3e4
@@ -2216,7 +2430,13 @@ version = "1.4.1+0"
 # ╠═992f3a2d-a942-4d72-8f7d-c37f904e915f
 # ╠═983c6296-db06-419c-81ed-eac04fa4db75
 # ╠═b06785ff-c044-4873-87b8-b9d4d977bf88
+# ╠═69644819-7549-43ed-ba0e-912e18fdc2c8
+# ╠═23185969-603e-452b-a3ab-ae624c7b539e
+# ╠═8bf4d4aa-3899-4cf0-b5e1-22db7f1a97a8
+# ╠═fb0edc00-0d2f-478c-ab8d-7d61f399b465
+# ╠═f9b6c7ac-f243-46da-9533-5acb7faaa861
 # ╠═34e7dfc9-1091-4852-8b38-12d366ec0a05
+# ╠═60648ab1-27f8-4fbc-abd6-d26f25522151
 # ╠═e2c6be01-f399-4acf-8b9a-4a89b9c3e6a3
 # ╟─1c793c5e-a2d6-4160-b672-281017b6aeae
 # ╠═6f50c308-4f63-42f1-a80c-0bbbe09f5632
@@ -2233,6 +2453,7 @@ version = "1.4.1+0"
 # ╠═82a4c747-5f01-49d9-aad7-0cac78cc1784
 # ╠═c8b527c4-cdd7-4b42-9cec-5ab45b25fbc1
 # ╠═495b205a-8bc9-4c7a-943c-1921362cd296
+# ╠═94e12aa5-fcd8-4656-a7c0-3c09f1c6dbd1
 # ╠═1746c4a8-7b2b-4187-825f-be978af4ace9
 # ╠═5cfb16ca-463c-4119-8369-0c9742a3a8eb
 # ╠═44ae7ccf-fdd2-4f8a-b7c7-543d649d57fc
@@ -2241,12 +2462,16 @@ version = "1.4.1+0"
 # ╠═58f69245-65e8-4e8e-a63d-c2000e77fbd4
 # ╠═8fa48e9f-ef7e-4d99-a391-3b4268bd2ebe
 # ╠═fe0c2f4e-2ed9-4c62-928b-a617bd1a5e36
+# ╠═a2634068-2f4d-4986-9d2d-f3e8bf729c4c
 # ╠═cc34f26e-b9d9-479b-a962-c98823244ebb
 # ╠═8ae1ff0e-d129-4496-ae0e-e10ef0ec7d31
 # ╠═8665d2ad-e5bc-417e-b347-8a01fa90ce93
-# ╠═d569bb78-a691-4da7-8429-d5a29e2c57a0
 # ╠═9d4bc54c-2c4a-463c-86c5-bf43ecc2aafc
-# ╠═ea8732c0-0b2c-4ebc-a206-74a253c6c6d4
 # ╠═ff876ea8-dc3e-4479-a246-65d16b5b85e2
+# ╠═8763f124-96b4-47de-bd33-bfd7b391e056
+# ╠═df9a9c7a-24ad-449c-9744-8e13d31e94c5
+# ╠═677e1b65-0a5b-4d40-b083-7a3f84692672
+# ╠═53c46316-3fa9-4e52-be60-862d58e31081
+# ╠═89bb8312-734b-4800-8bfd-93fbee37052b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
