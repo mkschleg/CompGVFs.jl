@@ -12,6 +12,11 @@ struct TDλ
     λ::Float32
 end
 
+# Like optimizers?
+function initialize(::TDλ, gvf::GVF)
+    #How do we initialize?
+end
+
 function update!(lu, gvf::GVF, o_t, x_t, a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
 	
     ρ_t = if gvf.π isa OnPolicy
