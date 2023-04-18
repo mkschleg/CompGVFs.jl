@@ -36,9 +36,6 @@ function fourrooms_heatmap_valuefunction(p::AbstractVector{<:AbstractFloat})
 	heatmap(reshape(p, 11, 11)[:, end:-1:1]')
 end
 
-# ╔═╡ abd3c836-8c72-4110-a55c-5b9746e52022
-
-
 # ╔═╡ c95ff355-9c70-410f-b852-f7c3004a773e
 function fourrooms_heatmap_policy(p::AbstractVector{<:AbstractVector})
 	plt_up = fourrooms_heatmap_valuefunction(getindex.(p, 1))
@@ -1355,7 +1352,6 @@ version = "1.4.1+0"
 # ╠═44d1610e-96bd-4541-8f07-2c528240b25d
 # ╠═ae6de407-1158-4196-850b-e4b530595079
 # ╠═5a44cc9f-4e4c-492e-8aee-870fc4e52e6e
-# ╠═abd3c836-8c72-4110-a55c-5b9746e52022
 # ╠═c95ff355-9c70-410f-b852-f7c3004a773e
 # ╠═d107cd3a-b441-4a42-8c62-90034bcb028c
 # ╠═ce18fa61-a224-4230-a0cb-55d84b9d1295

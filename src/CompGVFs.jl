@@ -23,13 +23,13 @@ end
 
 include("Learn.jl")
 
-# # Environment Code
-# include("Environments.jl")
+# Environment Code
+include("Environments.jl")
 
-# include("exp_utils.jl")
+include("exp_utils.jl")
 
 # # Experiments
-# include("exp.jl")
+include("exp.jl")
 
 
 end
