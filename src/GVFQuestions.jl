@@ -161,7 +161,7 @@ end
 function get_value(π::ϵGreedy, q, a_t)
     idx = findall(==(maximum(q)), q)
     if a_t ∈ idx
-	(1 - π.ϵ) / length(idx)
+	(1 - π.ϵ) / length(idx) + π.ϵ / length(q)
     else
 	π.ϵ / length(q)
     end

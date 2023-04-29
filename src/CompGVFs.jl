@@ -6,7 +6,6 @@ module CompGVFs
 # organization is key!
 
 
-
 # Simple learning Code
 # this is now JUST GVFQuestions
 include("GVFQuestions.jl")
