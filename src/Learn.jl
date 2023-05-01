@@ -82,11 +82,47 @@ struct Qλ
 	λ::Float32
 end
 
+
+function setup(lu::Qλ, gvf::BDemon, answer::Linear)
+    (z = zero(answer.w),)
+end
+
 function update!(lu::Qλ, 
-	         gvf::BDemon, 
+	         gvf::BDemon,
+                 answer,
+                 state,
+                 x_t::Int, x_tp1::Int, 
+		 a_t::Int, c, γ_t, γ_tp1)
+	         # o_t, x_t, 
+	         # a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
+
+
+    λ = lu.λ
+
+    bdemon = gvf
+
+    w = answer.w
+    z = state.z
+
+    # @info x_t
+    Q_t = predict(answer, x_t)[a_t]
+    Q_tp1 = maximum(predict(answer, x_tp1))
+
+    δ = c + γ_tp1*Q_tp1 - Q_t
+    
+    z .*= γ_t*λ
+    view(z, a_t, x_t) .+= 1
+    w .+= (lu.α * δ) .* z
+
+    return (λ=z)
+
+end
+
+function update!(lu::Qλ, 
+	         gvf::BDemon,
+                 state,
 	         o_t, x_t, 
 	         a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
-
     γ_t, γ_tp1 = if gvf.γ isa AbstractFloat
         eltype(w)(gvf.γ)
     else
@@ -95,19 +131,12 @@ function update!(lu::Qλ,
 
     c = get_value(gvf.c, o_tp1, x_tp1, p_tp1, r_tp1)
 
-	update!(lu, gvf, x_t, x_tp1, a_t, c, γ_t, γ_tp1)
-end
-
-function update!(
-		lu::Qλ, 
-		bdemon,
-		x_t::Int, x_tp1::Int, 
-		a_t::Int, c, γ_t, γ_tp1)
-    
     λ = lu.λ
 
+    bdemon = gvf
+
     w = bdemon.w
-    z = bdemon.z
+    z = state.z
 
     Q_t = predict(bdemon, a_t, x_t)
     Q_tp1 = maximum(predict(bdemon, x_tp1))
@@ -118,7 +147,47 @@ function update!(
     view(z, a_t, x_t) .+= 1
     w .+= (lu.α * δ) .* z
 
+    return (λ=z)
+
 end
+
+# function update!(lu::Qλ,
+# 	         gvf::BDemon, 
+# 	         o_t, x_t, 
+# 	         a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
+
+#     γ_t, γ_tp1 = if gvf.γ isa AbstractFloat
+#         eltype(w)(gvf.γ)
+#     else
+#         get_value(gvf.γ, o_t, x_t), get_value(gvf.γ, o_tp1, x_tp1)
+#     end
+
+#     c = get_value(gvf.c, o_tp1, x_tp1, p_tp1, r_tp1)
+
+#     update!(lu, gvf, x_t, x_tp1, a_t, c, γ_t, γ_tp1)
+# end
+
+# function update!(
+# 		lu::Qλ, 
+# 		bdemon,
+# 		x_t::Int, x_tp1::Int, 
+# 		a_t::Int, c, γ_t, γ_tp1)
+    
+#     λ = lu.λ
+
+#     w = bdemon.w
+#     z = bdemon.z
+
+#     Q_t = predict(bdemon, a_t, x_t)
+#     Q_tp1 = maximum(predict(bdemon, x_tp1))
+	
+#     δ = c + γ_tp1*Q_tp1 - Q_t
+    
+#     z .*= γ_t*λ
+#     view(z, a_t, x_t) .+= 1
+#     w .+= (lu.α * δ) .* z
+
+# end
 
 # function MinimalRLCore.is_terminal(bdemon::BDemon, s_t, x_t)
 #     get_value(bdemon.γ, s_t, x_t) == 0

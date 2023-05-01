@@ -211,7 +211,7 @@ end
     screen[end:-1:1,:]
 end
 
-@recipe function f(env::GridWithWalls, bdemon::BDemon)
+@recipe function f(env::GridWithWalls, bdemon::ControlLearner)
     ticks := nothing
     foreground_color_border := nothing
     grid := false

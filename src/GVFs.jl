@@ -31,24 +31,16 @@ predict(gvf::GVF{<:AbstractMatrix}, x::AbstractVector{Int}) = begin;
 end
 
 const Horde = Vector{<:GVF}
-
 predict(horde::Horde, x) = [predict(gvf, x) for gvf in horde]
 
 
-mutable struct BDemon{W, C, Π, Γ}
-    w::W
-    z::W
+mutable struct BDemon{C, Π, Γ}
     c::C
     π::Π
     γ::Γ
-    BDemon(num_feats::Int, num_actions::Int, cumulant, policy, discount) = 
-	new{Matrix{Float64}, typeof(cumulant), typeof(policy), typeof(discount)}(
-            zeros(num_actions, num_feats), zeros(num_actions, num_feats), cumulant, policy, discount)
 end
 
-function MinimalRLCore.start!(bdemon::BDemon, s_t, x_t=s_t)
-    bdemon.z .= 0
-end
+
 function MinimalRLCore.is_terminal(bdemon::BDemon, s_t, x_t)
     get_value(bdemon.γ, s_t, x_t) == 0
 end
@@ -63,11 +55,11 @@ predict(bdemon::BDemon{<:AbstractMatrix}, a::Int, x::Int) = begin;
 end
 
 function get_action(demon::BDemon, x_t)
-	get_action(demon.π, predict(demon, x_t))
+    get_action(demon.π, predict(demon, x_t))
 end
 
 function get_action(rng::Random.AbstractRNG, demon::BDemon, x_t)
-	get_action(rng, demon.π, predict(demon, x_t))
+    get_action(rng, demon.π, predict(demon, x_t))
 end
 
 # ╔═╡ 5ab59373-6a80-46b2-8687-ade15aa31b5e
