@@ -1,5 +1,9 @@
 
-struct Learner{FT, H, A, LU, FC, S}
+
+abstract type AbstractLearner end
+
+
+struct Learner{FT, H, A, LU, FC, S} <: AbstractLearner
     horde::H
     answer::A
     update::LU

@@ -79,7 +79,7 @@ function update!(lu::TDλ,
     w = answer.w
     z = state.z
 	
-    δ = c + γ_tp1*predict(gvf, x_tp1) - predict(gvf, x_t)
+    δ = c + γ_tp1*predict(answer, x_tp1) - predict(answer, x_t)
     
     z .*= γ_t*λ
     view(z, x_t) .+= 1

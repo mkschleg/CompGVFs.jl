@@ -98,12 +98,12 @@ fr_bd_hrd, fr_bd_p = let
 	env_size = size(CompGVFs.FourRooms())
 	env_feat_size = env_size[1] * env_size[2]
 	horde = [
-		[CompGVFs.GVF(env_feat_size, 
+		[CompGVFs.GVF(
 		 	CompGVFs.FeatureCumulant(11),
-			 fr_bdemon_11,
-			 CompGVFs.TerminatingDiscount(γ, 11))
+			fr_bdemon_11,
+			CompGVFs.TerminatingDiscount(γ, 11))
 		];
-		[CompGVFs.GVF(env_feat_size, 
+		[CompGVFs.GVF( 
 			 CompGVFs.RescaleCumulant(
 				CompGVFs.PredictionCumulant(i), 
 				γ),
@@ -139,15 +139,23 @@ fr_comp_bdemon_max_p, fr_comp_bdemon_max = let
 	env_size = size(CompGVFs.FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	bdemon = CompGVFs.BDemon(
-		env_feat_size, 
-		4, 
-		CompGVFs.GVFCumulant(fr_bd_hrd[5]),
+		CompGVFs.GVFCumulant(
+			CompGVFs.IndexVHordeLearner(
+				fr_bd_hrd,
+				5)),
 		# FeatureCumulant(11), 
 		CompGVFs.ϵGreedy(0.1),
-		CompGVFs.GVFThreshTerminatingMaxDiscount(0.9, fr_bd_hrd[4]))
-	
-	CompGVFs.fourrooms_behavior_offpolicy!(CompGVFs.Learner(bdemon, CompGVFs.Qλ(0.01, 0.9)), 500_000), bdemon
+		CompGVFs.GVFThreshTerminatingMaxDiscount(
+			0.9, CompGVFs.IndexVHordeLearner(
+				fr_bd_hrd,
+				5)))
+	learner = CompGVFs.QLinearLearner(env_feat_size, 4, bdemon, CompGVFs.Qλ(0.01, 0.9))
+	CompGVFs.fourrooms_behavior_offpolicy!(
+		learner, 500_000), learner
 end
+
+# ╔═╡ 748064bc-f6b7-45ab-a0d2-4b9c4782208c
+fr_comp_bdemon_max
 
 # ╔═╡ fb9fd7af-c918-4632-b695-6396359fe480
 plot(CompGVFs.FourRooms(), fr_comp_bdemon_max)
@@ -170,16 +178,17 @@ fr_comp_bdemon_const_p, fr_comp_bdemon_const = let
 	env_size = size(CompGVFs.FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	bdemon = CompGVFs.BDemon(
-		env_feat_size, 
-		4, 
-		CompGVFs.GVFCumulant(fr_bd_hrd[5]),
+		CompGVFs.GVFCumulant(CompGVFs.IndexVHordeLearner(
+				fr_bd_hrd,
+				5)),
 		# FeatureCumulant(11), 
 		CompGVFs.ϵGreedy(0.1),
 		CompGVFs.ConstantDiscount(0.9))
-	
+	learner = CompGVFs.QLinearLearner(
+		env_feat_size, 4, bdemon, CompGVFs.Qλ(0.01, 0.9))
 	CompGVFs.fourrooms_behavior_offpolicy!(
-		CompGVFs.Learner(bdemon, CompGVFs.Qλ(0.01, 0.9)), 
-		500_000), bdemon
+		learner, 
+		500_000), learner
 end
 
 # ╔═╡ cd3b5c29-6a2c-45b2-afc8-1aa59e96f519
@@ -238,7 +247,7 @@ fr_bdeomon_joint_pred, fr_bdemon_joint = let
 	env_size = size(CompGVFs.FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	
-	bdemon = CompGVFs.BDemon(env_feat_size, 4, 
+	bdemon = CompGVFs.BDemon(
 		CombinedCumulant(
 			CompGVFs.FeatureCumulant(11), 
 			CompGVFs.FeatureCumulant(111)),
@@ -246,9 +255,11 @@ fr_bdeomon_joint_pred, fr_bdemon_joint = let
 		CombinedDisc(
 			CompGVFs.TerminatingDiscount(0.9, 11), 
 			CompGVFs.TerminatingDiscount(0.9, 111)))
+	learner = CompGVFs.QLinearLearner(
+		env_feat_size, 4, bdemon, CompGVFs.Qλ(0.1, 0.9))
 	CompGVFs.fourrooms_behavior!(
-		CompGVFs.Learner(bdemon, CompGVFs.Qλ(0.1, 0.9)), 
-		1_000_000, ), bdemon
+		learner, 
+		1_000_000, ), learner
 end
 
 # ╔═╡ 49c6eb84-7bf5-4cd1-aa64-b0a34abf4af4
@@ -273,29 +284,29 @@ fr_bd_joint_hrd, fr_bd_joint_p = let
 	lu = CompGVFs.TDλ(0.01, 0.9)
 	γ = 0.9
 	env_size = size(CompGVFs.FourRooms())
-	env_feat_size = env_size[1] * env_size[2] 
-	horde, p = CompGVFs.fourrooms_experiment(num_steps, lu) do 
-		[[CompGVFs.GVF(env_feat_size, 
+	env_feat_size = env_size[1] * env_size[2]
+	horde = [[CompGVFs.GVF(
 			CombinedCumulant(
 				CompGVFs.FeatureCumulant(11), 
 				CompGVFs.FeatureCumulant(111)),
-			fr_bdemon_joint, 
+			fr_bdemon_joint,
 			# ConstantDiscount(γ))
 			CombinedDisc(
 				CompGVFs.TerminatingDiscount(0.9, 11), 
 				CompGVFs.TerminatingDiscount(0.9, 111)))
 		];
-		[CompGVFs.GVF(env_feat_size, 
+		[CompGVFs.GVF(
 			CompGVFs.RescaleCumulant(
 				CompGVFs.PredictionCumulant(i), 
 				γ),
-			fr_bdemon_joint, 
+			fr_bdemon_joint,
 			# ConstantDiscount(γ))
 			CombinedDisc(
 				CompGVFs.TerminatingDiscount(0.9, 11), 
 				CompGVFs.TerminatingDiscount(0.9, 111)))
 			for i in 1:11]]
-	end
+	learner = CompGVFs.VLinearLearner(env_feat_size, horde, lu)
+	horde, p = CompGVFs.fourrooms_experiment!(learner, num_steps)
 	horde, p
 end
 
@@ -320,15 +331,17 @@ fr_comp_bdemon_const_joint_p, fr_comp_bdemon_const_joint = let
 	env_size = size(CompGVFs.FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	bdemon = CompGVFs.BDemon(
-		env_feat_size, 
-		4, 
-		CompGVFs.GVFCumulant(fr_bd_joint_hrd[4]),
+		
+		CompGVFs.GVFCumulant(CompGVFs.IndexVHordeLearner(
+			fr_bd_joint_hrd, 4)),
 		# FeatureCumulant(11),
 		CompGVFs.ϵGreedy(0.1),
 		CompGVFs.ConstantDiscount(0.9))
-	
+	learner = CompGVFs.QLinearLearner(
+		env_feat_size, 
+		4, bdemon, CompGVFs.Qλ(0.01, 0.9))
 	CompGVFs.fourrooms_behavior_offpolicy!(
-		bdemon, 1_000_000, CompGVFs.Qλ(0.01, 0.9)), bdemon
+		learner, 1_000_000), learner
 end
 
 # ╔═╡ 39f2f12e-ae2a-4139-8b6d-5ddbb94663d9
@@ -349,16 +362,17 @@ fr_neg_bdemon_const_joint_p, fr_neg_bdemon_const_joint = let
 	env_size = size(CompGVFs.FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	bdemon = CompGVFs.BDemon(
-		env_feat_size, 
-		4, 
 		NegateCumulant(
-			CompGVFs.GVFCumulant(fr_bd_joint_hrd[1])),
+			CompGVFs.GVFCumulant(CompGVFs.IndexVHordeLearner(
+				fr_bd_joint_hrd, 1))),
 		# FeatureCumulant(11),
 		CompGVFs.ϵGreedy(0.1),
 		CompGVFs.ConstantDiscount(0.9))
-	
+	learner = CompGVFs.QLinearLearner(
+		env_feat_size, 
+		4, bdemon, CompGVFs.Qλ(0.01, 0.9))
 	CompGVFs.fourrooms_behavior_offpolicy!(
-		bdemon, 1_000_000, CompGVFs.Qλ(0.01, 0.9)), bdemon
+		learner, 1_000_000), learner
 end
 
 # ╔═╡ fa7fe4a9-0619-4dda-8de7-8b5bacb9757e
@@ -375,16 +389,16 @@ fr_neg_bdemon_p, fr_neg_bdemon = let
 	env_size = size(CompGVFs.FourRooms())
 	env_feat_size = env_size[1] * env_size[2] 
 	bdemon = CompGVFs.BDemon(
-		env_feat_size, 
-		4, 
 		NegateCumulant(
 			CompGVFs.FeatureCumulant(11)),
 		# FeatureCumulant(11),
 		CompGVFs.ϵGreedy(0.1),
 		CompGVFs.TerminatingDiscount(0.9, 11))
-	
+	learner = CompGVFs.QLinearLearner(
+		env_feat_size, 
+		4, bdemon, CompGVFs.Qλ(0.01, 0.9))
 	CompGVFs.fourrooms_behavior_offpolicy!(
-		bdemon, 1_000_000, CompGVFs.Qλ(0.01, 0.9)), bdemon
+		learner, 1_000_000,), learner
 end
 
 # ╔═╡ 8185a4e2-e31d-4be8-8686-c1be494cf6c0
@@ -1423,6 +1437,7 @@ version = "1.4.1+0"
 # ╠═d89eec44-5df2-4a46-b9db-8e68adbe6c3e
 # ╠═206a7861-dca5-433f-b5af-f2c3449f97bc
 # ╠═6bd6bbc9-b1f6-4a72-abbb-874bb1c64243
+# ╠═748064bc-f6b7-45ab-a0d2-4b9c4782208c
 # ╠═fb9fd7af-c918-4632-b695-6396359fe480
 # ╠═c792c013-ea1a-435b-8cb6-f284c754417d
 # ╠═2fb9bfc2-1df2-4c96-b632-533cc41b463c

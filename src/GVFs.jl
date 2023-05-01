@@ -2,36 +2,34 @@
 import MinimalRLCore
 import Random
 
-struct GVF{W, C, Π, Γ}
-    w::W
-    z::W
+struct GVF{C, Π, Γ}
     c::C
     π::Π
     γ::Γ
 end
 
-GVF(num_feats, cumulant, policy, discount) = 
-    GVF(zeros(num_feats), zeros(num_feats), cumulant, policy, discount)
+# GVF(cumulant, policy, discount) = 
+#     GVF(cumulant, policy, discount)
 
 
-predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{<:Number}) = 
-    dot(gvf.w, x)
+# predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{<:Number}) = 
+#     dot(gvf.w, x)
 
-predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{Int}) = begin; 
-    w = gvf.w; 
-    ret = sum(view(w, x))
-end
+# predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{Int}) = begin; 
+#     w = gvf.w; 
+#     ret = sum(view(w, x))
+# end
 
-predict(gvf::GVF{<:AbstractVector}, x::Int) = begin; 
-    gvf.w[x]
-end
+# predict(gvf::GVF{<:AbstractVector}, x::Int) = begin; 
+#     gvf.w[x]
+# end
 
-predict(gvf::GVF{<:AbstractMatrix}, x::AbstractVector{Int}) = begin; 
-    gvf.w[x]
-end
+# predict(gvf::GVF{<:AbstractMatrix}, x::AbstractVector{Int}) = begin; 
+#     gvf.w[x]
+# end
 
 const Horde = Vector{<:GVF}
-predict(horde::Horde, x) = [predict(gvf, x) for gvf in horde]
+# predict(horde::Horde, x) = [predict(gvf, x) for gvf in horde]
 
 
 mutable struct BDemon{C, Π, Γ}
@@ -45,14 +43,14 @@ function MinimalRLCore.is_terminal(bdemon::BDemon, s_t, x_t)
     get_value(bdemon.γ, s_t, x_t) == 0
 end
 
-predict(bdemon::BDemon{<:AbstractMatrix}, x::Int) = begin; 
-    bdemon.w[:, x]
-end
+# predict(bdemon::BDemon{<:AbstractMatrix}, x::Int) = begin; 
+#     bdemon.w[:, x]
+# end
 
-# ╔═╡ 33db32af-2e34-4dad-abcc-e023349aae70
-predict(bdemon::BDemon{<:AbstractMatrix}, a::Int, x::Int) = begin; 
-    bdemon.w[a, x]
-end
+# # ╔═╡ 33db32af-2e34-4dad-abcc-e023349aae70
+# predict(bdemon::BDemon{<:AbstractMatrix}, a::Int, x::Int) = begin; 
+#     bdemon.w[a, x]
+# end
 
 function get_action(demon::BDemon, x_t)
     get_action(demon.π, predict(demon, x_t))
@@ -105,11 +103,13 @@ end
 get_value(rsc::ThresholdCumulant, o, x, p, r) = 
     get_value(rsc.c, o, x, p, r) >= rsc.θ ? 1 : 0
 
-struct GVFCumulant{G<:GVF}
-    gvf::G
-end
-get_value(gvfc::GVFCumulant, o, x, p, r) = 
-    predict(gvfc.gvf, x)
+
+
+# struct GVFCumulant{G<:GVF}
+#     gvf::G
+# end
+# get_value(gvfc::GVFCumulant, o, x, p, r) = 
+#     predict(gvfc.gvf, x)
 
 """
     Policies
@@ -174,30 +174,6 @@ end
 get_value(fc::TerminatingDiscount, o, x::Vector{Int}) = fc.idx ∈ x ? zero(typeof(fc.γ)) : fc.γ
 get_value(fc::TerminatingDiscount, o, x::Int) = fc.idx == x ? zero(typeof(fc.γ)) : fc.γ
 
-struct GVFThreshTerminatingDiscount{F, G<:GVF}
-    γ::F
-    gvf::G
-    θ::Float64
-end
-get_value(fc::GVFThreshTerminatingDiscount, o, x::Int) = begin
-    predict(fc.gvf, x) > fc.θ ? zero(typeof(fc.γ)) : fc.γ
-end
 
-mutable struct GVFThreshTerminatingMaxDiscount{F, G<:GVF}
-    γ::F
-    gvf::G
-    θ::Float64
-    GVFThreshTerminatingMaxDiscount(γ, gvf) = new{typeof(γ), typeof(gvf)}(γ, gvf, -Inf)
-end
-
-get_value(fc::GVFThreshTerminatingMaxDiscount, o, x::Int) = begin
-    pred = predict(fc.gvf, x)
-    if pred > fc.θ || pred ≈ fc.θ
-	fc.θ = pred
-	return zero(typeof(fc.γ))
-    else
-	return fc.γ
-    end
-end
 
 
