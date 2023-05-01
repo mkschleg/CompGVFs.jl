@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ ab0b637f-97cf-4c8d-86a4-a3b2ff117caf
 using Plots
 
@@ -22,22 +32,35 @@ function ingredients(path::String)
     m
 end
 
+# ╔═╡ 7de6473b-4463-4d03-bed9-751b42078a56
+md"""
+# Introduction
+
+The following notebook is an example of using composite GVFs to build policies which have interesting, sometimes unintuitive behavior.
+"""
+
 # ╔═╡ 66c1a61e-2025-4a70-aabe-2710dee7f0fb
 import MinimalRLCore, RecipesBase, Colors, ProgressLogging # CompGVFs.jl dependencies
 
+# ╔═╡ 26ca0c30-1f80-401e-9ae0-00b16d999b89
+import PlutoUI
+
+# ╔═╡ caeb8895-84ec-4544-9fdd-bcbded3a641c
+import MarkdownLiteral: MarkdownLiteral, @mdx
+
 # ╔═╡ 44d1610e-96bd-4541-8f07-2c528240b25d
 import Random
+
+# ╔═╡ c66d13ea-c932-43d0-86e6-e1f0cd294bac
+PlutoUI.TableOfContents()
 
 # ╔═╡ ae6de407-1158-4196-850b-e4b530595079
 CompGVFs = ingredients("../src/CompGVFs.jl").CompGVFs.CompGVFs
 
 # ╔═╡ 5a44cc9f-4e4c-492e-8aee-870fc4e52e6e
-function fourrooms_heatmap_valuefunction(p::AbstractVector{<:AbstractFloat})
-	heatmap(reshape(p, 11, 11)[:, end:-1:1]')
+function fourrooms_heatmap_valuefunction(p::AbstractVector{<:AbstractFloat}; pkwargs...)
+	heatmap(reshape(p, 11, 11)[:, end:-1:1]'; pkwargs...)
 end
-
-# ╔═╡ abd3c836-8c72-4110-a55c-5b9746e52022
-
 
 # ╔═╡ c95ff355-9c70-410f-b852-f7c3004a773e
 function fourrooms_heatmap_policy(p::AbstractVector{<:AbstractVector})
@@ -61,6 +84,13 @@ let
 	MinimalRLCore.get_state(env)
 end
 
+# ╔═╡ b2cec26a-8e26-4b94-b113-6bec215efcc4
+@mdx """
+# Shortest Path to a goal!
+
+As an initial start, we will learn a policy which minimizes the time to a goal in the top-left corner of the four rooms environment. This is done through a simple application of `Qλ` and using a `ControlLearner`. 
+"""
+
 # ╔═╡ ce18fa61-a224-4230-a0cb-55d84b9d1295
 fr_bdeomon_11_pred, fr_bdemon_11 = let
 	env_size = size(CompGVFs.FourRooms())
@@ -74,10 +104,21 @@ fr_bdeomon_11_pred, fr_bdemon_11 = let
 	CompGVFs.fourrooms_behavior!(learner, 1_000_000), learner
 end
 
+# ╔═╡ 74e6aba2-a189-4877-9b07-f4c247f33366
+md"""
+The following plot shows the value function for each action in every state of the four rooms environment.
+"""
+
 # ╔═╡ 6fb15522-98e6-46a4-832c-432da771e8a9
 fourrooms_heatmap_policy(fr_bdeomon_11_pred)
 
+# ╔═╡ d7e2a900-cc62-4061-bea9-a7dfb2dd9647
+@mdx """
+The following plot shows the greedy policy of the resulting learner.
+"""
+
 # ╔═╡ 3dde5483-4e7f-44a2-a21e-801bfbe4b623
+# ╠═╡ show_logs = false
 plot(CompGVFs.FourRooms(), fr_bdemon_11)
 
 # ╔═╡ 84316175-c9ac-491e-ac2f-072e7fc5f93c
@@ -89,6 +130,16 @@ let
 		savefig(plt, "../fourrooms_example/bdemon_11_heatmap.png")
 	end
 end
+
+# ╔═╡ 36184e5e-5c1e-4a8c-934f-be2c210293e1
+@mdx """
+# Naive Composite Predictions
+
+We can build a chain of composite gvfs with:
+- policy: Using the policy learned in the [above section](#shortest-path-to-a-goal)
+- cumulant: The first gvf uses the goal cumlant from the above section, but subsequent gvfs use the previous' prediction on `t+1` as a cumulant.
+- discount: Simple terminating discount at the goal.
+"""
 
 # ╔═╡ 9aa92437-6df6-4a95-8810-e295423b20b6
 fr_bd_hrd, fr_bd_p = let	
@@ -118,11 +169,18 @@ fr_bd_hrd, fr_bd_p = let
 	horde, p
 end
 
-# ╔═╡ 91a075ec-5619-44ef-b016-067303142a3a
-fr_bd_hrd
+# ╔═╡ 561cd832-e4fd-4683-98da-665d4f02bb0c
+@mdx """
+The following plot is the value function of the resulting value function for:
+
+GVF: $(@bind _ncp_horde_idx PlutoUI.NumberField(1:12, default=1))
+"""
 
 # ╔═╡ d89eec44-5df2-4a46-b9db-8e68adbe6c3e
-fourrooms_heatmap_valuefunction(getindex.(fr_bd_p, 10))
+_ncp_horde_plts = [fourrooms_heatmap_valuefunction(getindex.(fr_bd_p, i), title="GVF $(i)") for i in 1:12];
+
+# ╔═╡ db1ccaf1-65af-4a5e-852e-8247af73477d
+_ncp_horde_plts[_ncp_horde_idx]
 
 # ╔═╡ 206a7861-dca5-433f-b5af-f2c3449f97bc
 let
@@ -134,6 +192,13 @@ let
 	end
 end
 
+# ╔═╡ 03e31ea9-ab27-4e09-8dd2-e621c32c8714
+@mdx """
+# Max from composite prediction
+
+In the following experiment we use gvf 7 of the horde learned in the [above section](#naive-composite-predictions). We use this as the cumulant and learn a policy which maximizes the prediction and terminates when the discount is in an epsilon of the max seen prediction.
+"""
+
 # ╔═╡ 6bd6bbc9-b1f6-4a72-abbb-874bb1c64243
 fr_comp_bdemon_max_p, fr_comp_bdemon_max = let	
 	env_size = size(CompGVFs.FourRooms())
@@ -142,14 +207,15 @@ fr_comp_bdemon_max_p, fr_comp_bdemon_max = let
 		CompGVFs.GVFCumulant(
 			CompGVFs.IndexVHordeLearner(
 				fr_bd_hrd,
-				5)),
+				7)),
 		# FeatureCumulant(11), 
 		CompGVFs.ϵGreedy(0.1),
 		CompGVFs.GVFThreshTerminatingMaxDiscount(
 			0.9, CompGVFs.IndexVHordeLearner(
 				fr_bd_hrd,
-				5)))
-	learner = CompGVFs.QLinearLearner(env_feat_size, 4, bdemon, CompGVFs.Qλ(0.01, 0.9))
+				7)))
+	learner = CompGVFs.QLinearLearner(
+		env_feat_size, 4, bdemon, CompGVFs.Qλ(0.01, 0.9))
 	CompGVFs.fourrooms_behavior_offpolicy!(
 		learner, 500_000), learner
 end
@@ -158,6 +224,7 @@ end
 fr_comp_bdemon_max
 
 # ╔═╡ fb9fd7af-c918-4632-b695-6396359fe480
+# ╠═╡ show_logs = false
 plot(CompGVFs.FourRooms(), fr_comp_bdemon_max)
 
 # ╔═╡ c792c013-ea1a-435b-8cb6-f284c754417d
@@ -172,6 +239,13 @@ end
 
 # ╔═╡ 2fb9bfc2-1df2-4c96-b632-533cc41b463c
 fourrooms_heatmap_policy(fr_comp_bdemon_max_p)
+
+# ╔═╡ d37304bb-8899-4796-8963-3341ff82d55b
+@mdx """
+# Max from composite prediction
+
+In the following experiment we use gvf 7 of the horde learned in the [above section](#naive-composite-predictions). We use this as the cumulant and learn a policy which maximizes the cumulant and never terminates with `γ=0.9`.
+"""
 
 # ╔═╡ 6ad53250-6177-40f2-bdad-be3851294172
 fr_comp_bdemon_const_p, fr_comp_bdemon_const = let	
@@ -192,6 +266,7 @@ fr_comp_bdemon_const_p, fr_comp_bdemon_const = let
 end
 
 # ╔═╡ cd3b5c29-6a2c-45b2-afc8-1aa59e96f519
+# ╠═╡ show_logs = false
 plot(CompGVFs.FourRooms(), fr_comp_bdemon_const)
 
 # ╔═╡ 0037bb06-d6b5-45ae-84b9-31af35683d25
@@ -207,6 +282,11 @@ let
 	end
 end
 
+# ╔═╡ a6990b0b-8635-4221-991f-6638e869a224
+@mdx """
+# Some extra cumulant for the next sections
+"""
+
 # ╔═╡ dc5b5f44-5e4a-4eda-9c6d-c378c79e553d
 begin
 struct CombinedDisc{D1, D2}
@@ -215,9 +295,6 @@ struct CombinedDisc{D1, D2}
 end
 # (d::CombinedDisc)(args...) = CompGVFs.get_value(d, args...)
 end
-
-# ╔═╡ 808e8e40-d60a-4f17-a605-5b6b287a1c18
-
 
 # ╔═╡ 1092fdbc-8987-451f-a8d0-dcbe48a2f340
 begin
@@ -241,6 +318,13 @@ CompGVFs.get_value(c::CombinedCumulant, o, x, p, r) = CompGVFs.get_value(c.c1, o
 
 # ╔═╡ e0f7130b-b26f-49cc-bea1-132afc4eee6d
 CompGVFs.get_value(d::CombinedDisc, o, x) = (CompGVFs.get_value(d.d1, o, x) * CompGVFs.get_value(d.d2, o, x))/d.d1.γ
+
+# ╔═╡ bf346c2a-991d-4287-a006-2b7dbed0c965
+@mdx """
+# Joint Goal Behavior
+
+The following is a simple learned policy which maximizes the distance to two goals (in opposing corners of the domain).
+"""
 
 # ╔═╡ 967863c7-b4b7-48d7-a811-42e8c3f1f62f
 fr_bdeomon_joint_pred, fr_bdemon_joint = let
@@ -266,6 +350,7 @@ end
 fourrooms_heatmap_policy(fr_bdeomon_joint_pred)
 
 # ╔═╡ abd2f153-9aeb-4aa6-a368-c561b6f27701
+# ╠═╡ show_logs = false
 plot(CompGVFs.FourRooms(), fr_bdemon_joint)
 
 # ╔═╡ 604bc156-047c-47f7-9c69-4d7dc0fc9692
@@ -277,6 +362,14 @@ let
 		savefig(plt, "../fourrooms_example/joint_bdemon_heatmap.png")
 	end
 end
+
+# ╔═╡ eef37179-d113-4cfe-ab68-8ae66ab68f7a
+@mdx """
+# Horde from Joint Behavior
+
+In the following we follow a similar procedure as [the previous composite prediction section](#naive-composite-predictions), except we use the joint goal behavior learned in the [above section](#joint-goal-behavior).
+
+"""
 
 # ╔═╡ 8e93d983-143c-4d98-9702-e2ff956a425d
 fr_bd_joint_hrd, fr_bd_joint_p = let	
@@ -310,8 +403,18 @@ fr_bd_joint_hrd, fr_bd_joint_p = let
 	horde, p
 end
 
-# ╔═╡ 4dd55820-2f55-4cd4-bc14-54ad6a0418b5
-fourrooms_heatmap_valuefunction(getindex.(fr_bd_joint_p, 5))
+# ╔═╡ f0283bac-2f86-4da0-8357-f84ac70aa2de
+@mdx """
+The following plot is the value function of the resulting value function for:
+
+GVF: $(@bind _jcp_horde_idx PlutoUI.NumberField(1:12, default=1))
+"""
+
+# ╔═╡ 45d656c2-cbde-4391-a400-2d57775053b0
+_jcp_horde_plts = [fourrooms_heatmap_valuefunction(getindex.(fr_bd_joint_p, i), title="GVF $(i)") for i in 1:12];
+
+# ╔═╡ ba9b557f-8395-4548-ae6a-253ee6e95590
+_jcp_horde_plts[_jcp_horde_idx]
 
 # ╔═╡ 68b9c6dc-cd6b-4a0c-bc9f-73719ea229e7
 let
@@ -325,6 +428,9 @@ end
 
 # ╔═╡ 232b6313-9e54-4894-9afc-fb5618a2307b
 # getindex.(fr_bd_joint_p, 5)
+
+# ╔═╡ f5e14dfe-86c2-4fe3-8a57-0678cba69309
+
 
 # ╔═╡ e8035c2e-7e64-4884-ba2c-afb2dae72fb3
 fr_comp_bdemon_const_joint_p, fr_comp_bdemon_const_joint = let	
@@ -345,6 +451,7 @@ fr_comp_bdemon_const_joint_p, fr_comp_bdemon_const_joint = let
 end
 
 # ╔═╡ 39f2f12e-ae2a-4139-8b6d-5ddbb94663d9
+# ╠═╡ show_logs = false
 plot(CompGVFs.FourRooms(), fr_comp_bdemon_const_joint)
 
 # ╔═╡ 7a08e753-5b71-46a5-bf64-3f135ba5b692
@@ -356,6 +463,9 @@ let
 		savefig(plt, "../fourrooms_example/joint_comp_bdemon_const_heatmap.png")
 	end
 end
+
+# ╔═╡ 6cffcce3-b082-4f1f-abaf-12260e27dd48
+
 
 # ╔═╡ 25b766eb-c465-4628-a8f4-b24c7e18a7ba
 fr_neg_bdemon_const_joint_p, fr_neg_bdemon_const_joint = let	
@@ -376,6 +486,7 @@ fr_neg_bdemon_const_joint_p, fr_neg_bdemon_const_joint = let
 end
 
 # ╔═╡ fa7fe4a9-0619-4dda-8de7-8b5bacb9757e
+# ╠═╡ show_logs = false
 plot(CompGVFs.FourRooms(), fr_neg_bdemon_const_joint)
 
 # ╔═╡ 0e481bf5-8ef7-449a-9d55-452697c46c57
@@ -383,6 +494,13 @@ fourrooms_heatmap_policy(fr_neg_bdemon_const_joint_p)
 
 # ╔═╡ e499afc3-8894-4532-a5cf-d139a04d90f1
 fourrooms_heatmap_policy(fr_comp_bdemon_const_joint_p)
+
+# ╔═╡ b653550f-bdf7-4a96-a6f4-4536963c8a72
+@mdx """
+# Comparing to a negated cumulant
+
+Below, instead of using composite predictions, we instead use a negated version of the goal cumulant (i.e. `-1*c`). This gives us a way to think about some of the behavior we've seen. This doesn't result in the surprising behavior above,
+"""
 
 # ╔═╡ 9738a622-d358-4766-8d3c-2b1743c8287e
 fr_neg_bdemon_p, fr_neg_bdemon = let	
@@ -405,22 +523,27 @@ end
 fourrooms_heatmap_policy(fr_neg_bdemon_p)
 
 # ╔═╡ ee84b679-cb40-4d6b-bc9c-fb8c1bdb1943
+# ╠═╡ show_logs = false
 plot(CompGVFs.FourRooms(), fr_neg_bdemon)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+MarkdownLiteral = "736d6165-7244-6769-4267-6b50796e6954"
 MinimalRLCore = "4557a151-568a-41c4-844f-9d8069264cea"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 
 [compat]
 Colors = "~0.12.10"
+MarkdownLiteral = "~0.1.1"
 MinimalRLCore = "~0.2.1"
 Plots = "~1.38.10"
+PlutoUI = "~0.7.50"
 ProgressLogging = "~0.1.4"
 RecipesBase = "~1.3.4"
 """
@@ -431,7 +554,13 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0-rc2"
 manifest_format = "2.0"
-project_hash = "3e1e468e2d1ba311cfa99ad23bce45cd2363b755"
+project_hash = "c91afb46dd25e3b9213ad499c11d9a374b72ecf6"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.1.4"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -490,6 +619,12 @@ git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.10"
 
+[[deps.CommonMark]]
+deps = ["Crayons", "JSON", "PrecompileTools", "URIs"]
+git-tree-sha1 = "532c4185d3c9037c0237546d817858b23cf9e071"
+uuid = "a80b9123-70ca-4bc0-993e-6e3bcb318db6"
+version = "0.8.12"
+
 [[deps.CommonRLInterface]]
 deps = ["MacroTools"]
 git-tree-sha1 = "21de56ebf28c262651e682f7fe614d44623dc087"
@@ -521,6 +656,11 @@ version = "2.1.1"
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.2"
+
+[[deps.Crayons]]
+git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
+uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
+version = "4.1.1"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "e8119c1a33d267e16108be441a287a6981ba1630"
@@ -657,6 +797,24 @@ deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
+
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "c47c5fa4c5308f27ccaac35504858d8914e102f9"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.4"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.2"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -837,6 +995,11 @@ git-tree-sha1 = "cedb76b37bc5a6c702ade66be44f831fa23c681e"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.0"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
@@ -846,6 +1009,12 @@ version = "0.5.10"
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+[[deps.MarkdownLiteral]]
+deps = ["CommonMark", "HypertextLiteral"]
+git-tree-sha1 = "0d3fa2dd374934b62ee16a4721fe68c418b92899"
+uuid = "736d6165-7244-6769-4267-6b50796e6954"
+version = "0.1.1"
 
 [[deps.MbedTLS]]
 deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "Random", "Sockets"]
@@ -995,6 +1164,12 @@ version = "1.38.10"
     IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "5bb5129fdd62a2bbbe17c2756932259acf467386"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.50"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1163,6 +1338,11 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "0b829474fed270a4b0ab07117dce9b9a2fa7581a"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.12"
+
+[[deps.Tricks]]
+git-tree-sha1 = "aadb748be58b492045b4f56166b5188aa63ce549"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.7"
 
 [[deps.URIs]]
 git-tree-sha1 = "074f993b0ca030848b897beff716d93aca60f06a"
@@ -1419,54 +1599,71 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═fe6e9a98-c1e7-11ed-39ed-05ec4ee56c8a
+# ╟─fe6e9a98-c1e7-11ed-39ed-05ec4ee56c8a
+# ╟─7de6473b-4463-4d03-bed9-751b42078a56
 # ╠═66c1a61e-2025-4a70-aabe-2710dee7f0fb
+# ╠═26ca0c30-1f80-401e-9ae0-00b16d999b89
+# ╠═caeb8895-84ec-4544-9fdd-bcbded3a641c
 # ╠═ab0b637f-97cf-4c8d-86a4-a3b2ff117caf
 # ╠═44d1610e-96bd-4541-8f07-2c528240b25d
+# ╠═c66d13ea-c932-43d0-86e6-e1f0cd294bac
 # ╠═ae6de407-1158-4196-850b-e4b530595079
 # ╠═5a44cc9f-4e4c-492e-8aee-870fc4e52e6e
-# ╠═abd3c836-8c72-4110-a55c-5b9746e52022
 # ╠═c95ff355-9c70-410f-b852-f7c3004a773e
 # ╠═d107cd3a-b441-4a42-8c62-90034bcb028c
+# ╟─b2cec26a-8e26-4b94-b113-6bec215efcc4
 # ╠═ce18fa61-a224-4230-a0cb-55d84b9d1295
+# ╟─74e6aba2-a189-4877-9b07-f4c247f33366
 # ╠═6fb15522-98e6-46a4-832c-432da771e8a9
+# ╟─d7e2a900-cc62-4061-bea9-a7dfb2dd9647
 # ╠═3dde5483-4e7f-44a2-a21e-801bfbe4b623
 # ╠═84316175-c9ac-491e-ac2f-072e7fc5f93c
+# ╟─36184e5e-5c1e-4a8c-934f-be2c210293e1
 # ╠═9aa92437-6df6-4a95-8810-e295423b20b6
-# ╠═91a075ec-5619-44ef-b016-067303142a3a
+# ╟─561cd832-e4fd-4683-98da-665d4f02bb0c
 # ╠═d89eec44-5df2-4a46-b9db-8e68adbe6c3e
+# ╟─db1ccaf1-65af-4a5e-852e-8247af73477d
 # ╠═206a7861-dca5-433f-b5af-f2c3449f97bc
+# ╟─03e31ea9-ab27-4e09-8dd2-e621c32c8714
 # ╠═6bd6bbc9-b1f6-4a72-abbb-874bb1c64243
 # ╠═748064bc-f6b7-45ab-a0d2-4b9c4782208c
 # ╠═fb9fd7af-c918-4632-b695-6396359fe480
 # ╠═c792c013-ea1a-435b-8cb6-f284c754417d
 # ╠═2fb9bfc2-1df2-4c96-b632-533cc41b463c
+# ╟─d37304bb-8899-4796-8963-3341ff82d55b
 # ╠═6ad53250-6177-40f2-bdad-be3851294172
 # ╠═cd3b5c29-6a2c-45b2-afc8-1aa59e96f519
 # ╠═0037bb06-d6b5-45ae-84b9-31af35683d25
 # ╠═2bb526c7-576f-421a-bc1c-0580d09dd9e8
+# ╠═a6990b0b-8635-4221-991f-6638e869a224
 # ╠═dc5b5f44-5e4a-4eda-9c6d-c378c79e553d
 # ╠═e0f7130b-b26f-49cc-bea1-132afc4eee6d
-# ╠═808e8e40-d60a-4f17-a605-5b6b287a1c18
 # ╠═1092fdbc-8987-451f-a8d0-dcbe48a2f340
 # ╠═87bfaf12-a965-48ff-b243-eae9902e6d6f
 # ╠═7341e0f7-ab92-436e-ad77-2900122b60c3
 # ╠═0db6b442-f0e9-4057-9b6b-0db16ac250eb
+# ╟─bf346c2a-991d-4287-a006-2b7dbed0c965
 # ╠═967863c7-b4b7-48d7-a811-42e8c3f1f62f
 # ╠═49c6eb84-7bf5-4cd1-aa64-b0a34abf4af4
 # ╠═abd2f153-9aeb-4aa6-a368-c561b6f27701
 # ╠═604bc156-047c-47f7-9c69-4d7dc0fc9692
+# ╟─eef37179-d113-4cfe-ab68-8ae66ab68f7a
 # ╠═8e93d983-143c-4d98-9702-e2ff956a425d
-# ╠═4dd55820-2f55-4cd4-bc14-54ad6a0418b5
+# ╠═f0283bac-2f86-4da0-8357-f84ac70aa2de
+# ╠═45d656c2-cbde-4391-a400-2d57775053b0
+# ╠═ba9b557f-8395-4548-ae6a-253ee6e95590
 # ╠═68b9c6dc-cd6b-4a0c-bc9f-73719ea229e7
 # ╠═232b6313-9e54-4894-9afc-fb5618a2307b
+# ╠═f5e14dfe-86c2-4fe3-8a57-0678cba69309
 # ╠═e8035c2e-7e64-4884-ba2c-afb2dae72fb3
 # ╠═39f2f12e-ae2a-4139-8b6d-5ddbb94663d9
 # ╠═7a08e753-5b71-46a5-bf64-3f135ba5b692
+# ╠═6cffcce3-b082-4f1f-abaf-12260e27dd48
 # ╠═25b766eb-c465-4628-a8f4-b24c7e18a7ba
 # ╠═fa7fe4a9-0619-4dda-8de7-8b5bacb9757e
 # ╠═0e481bf5-8ef7-449a-9d55-452697c46c57
 # ╠═e499afc3-8894-4532-a5cf-d139a04d90f1
+# ╟─b653550f-bdf7-4a96-a6f4-4536963c8a72
 # ╠═9738a622-d358-4766-8d3c-2b1743c8287e
 # ╠═8185a4e2-e31d-4be8-8686-c1be494cf6c0
 # ╠═ee84b679-cb40-4d6b-bc9c-fb8c1bdb1943
