@@ -1,46 +1,57 @@
 
-function update!(lu, gvfs::Horde, args...)
-    # We should thunk here....
-    # @info gvfs
-    for i in 1:length(gvfs)
-	update!(lu, gvfs[i], args...)
-    end
-end
+# function update!(lu, gvfs::Horde, args...)
+#     # We should thunk here....
+#     # @info gvfs
+#     for i in 1:length(gvfs)
+# 	update!(lu, gvfs[i], args...)
+#     end
+# end
 
 struct TDλ
     α::Float32
     λ::Float32
 end
 
-function update!(lu, gvf::GVF, o_t, x_t, a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
-	
-    ρ_t = if gvf.π isa OnPolicy
-       	one(eltype(gvf.w))
-    else
-        get_value(gvf.π, o_t, a_t)/μ_t
-    end
-	
-    γ_t, γ_tp1 = if gvf.γ isa AbstractFloat
-        eltype(w)(gvf.γ)
-    else
-        get_value(gvf.γ, o_t, x_t), get_value(gvf.γ, o_tp1, x_tp1)
-    end
-
-    c = get_value(gvf.c, o_tp1, x_tp1, p_tp1, r_tp1)
-
-    update!(lu, gvf, x_t, x_tp1, ρ_t, c, γ_t, γ_tp1)
+function setup(lu::TDλ, gvf::GVF, answer::Linear)
+    (z = zero(answer.w),)
 end
+
+function setup(lu::TDλ, gvf::Horde, answer::LinearCollection)
+    [(z = zero(a.w),) for a in answer.funcs]
+end
+
+# function update!(lu, gvf::GVF, o_t, x_t, a_t, μ_t, o_tp1, x_tp1, r_tp1, p_tp1)
+	
+#     ρ_t = if gvf.π isa OnPolicy
+#        	one(eltype(gvf.w))
+#     else
+#         get_value(gvf.π, o_t, a_t)/μ_t
+#     end
+	
+#     γ_t, γ_tp1 = if gvf.γ isa AbstractFloat
+#         eltype(w)(gvf.γ)
+#     else
+#         get_value(gvf.γ, o_t, x_t), get_value(gvf.γ, o_tp1, x_tp1)
+#     end
+
+#     c = get_value(gvf.c, o_tp1, x_tp1, p_tp1, r_tp1)
+
+#     update!(lu, gvf, x_t, x_tp1, ρ_t, c, γ_t, γ_tp1)
+# end
 
 function update!(lu::TDλ, 
 		 gvf,
+                 answer,
+                 state,
 		 x_t, x_tp1, 
 		 ρ_t, c, γ_t, γ_tp1)
     
     λ = lu.λ
-    w = gvf.w
-    z = gvf.z
+
+    w = answer.w
+    z = state.z
 	
-    δ = c + γ_tp1*predict(gvf, x_tp1) - predict(gvf, x_t)
+    δ = c + γ_tp1*predict(answer, x_tp1) - predict(answer, x_t)
 
 
     if eltype(x_t) <: Integer
@@ -59,16 +70,16 @@ end
 # ╔═╡ 47eba562-99e0-4815-a028-21f7376cd257
 function update!(lu::TDλ,
 		 gvf,
+                 answer,
+                 state,
 		 x_t::Int, x_tp1::Int, 
 		 ρ_t, c, γ_t, γ_tp1)
     
     λ = lu.λ
-
-    w = gvf.w
-    z = gvf.z
+    w = answer.w
+    z = state.z
 	
     δ = c + γ_tp1*predict(gvf, x_tp1) - predict(gvf, x_t)
-
     
     z .*= γ_t*λ
     view(z, x_t) .+= 1

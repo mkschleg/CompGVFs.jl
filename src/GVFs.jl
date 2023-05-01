@@ -131,9 +131,9 @@ end
 get_value(rp::RandomPolicy, args...) = 1//length(actions)
 
 # Using BDemon as a policy
-function get_value(bdemon::BDemon, s_t, a_t)
-    get_value(bdemon.π, predict(bdemon, s_t), a_t)
-end
+# function get_value(bdemon::BDemon, s_t, a_t)
+#     get_value(bdemon.π, predict(bdemon, s_t), a_t)
+# end
 
 struct ϵGreedy
     ϵ::Float32

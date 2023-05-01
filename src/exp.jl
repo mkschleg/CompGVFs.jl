@@ -18,55 +18,51 @@ function fourrooms_experiment!(learner::HordeLearner,
 
 	s_tp1, r_tp1, _ = step!(env, a_t)
         
-        update!(learner, s_t, a_t, s_tp1, r_tp1)
-	# p_tp1 = predict(learner, s_tp1)
-	# update!(lu, horde, s_t, s_t, a_t, 
-	# 	1/length(env.ACTIONS), s_tp1, s_tp1, 
-	# 	r_tp1, p_tp1)
+        update!(learner, s_t, a_t, μ_t, s_tp1, r_tp1)
 
 	s_t = copy(s_tp1)
     end
     env_size = size(FourRooms())
     env_feat_size = env_size[1] * env_size[2] 
     p = [predict(learner, x) for x in 1:env_feat_size]
-    
+    learner, p
 end
 
-function fourrooms_experiment!(
-    horde,
-    num_steps,
-    lu = TDλ(0.1, 0.9); seed = 1, kwargs...)
+# function fourrooms_experiment!(
+#     horde,
+#     num_steps,
+#     lu = TDλ(0.1, 0.9); seed = 1, kwargs...)
 
-    rng = Random.Xoshiro(seed)
+#     rng = Random.Xoshiro(seed)
     
-    env = FourRooms() #CycleWorld(env_size, partially_observable=false)
+#     env = FourRooms() #CycleWorld(env_size, partially_observable=false)
     
-    s_t = start!(env, rng)
+#     s_t = start!(env, rng)
     
-    @progress for step in 1:num_steps
+#     @progress for step in 1:num_steps
 
-	a_t = rand(rng, env.ACTIONS)
-	s_tp1, r_tp1, _ = step!(env, a_t)
-	p_tp1 = predict(horde, s_tp1)
-	update!(lu, horde, s_t, s_t, a_t, 
-		1/length(env.ACTIONS), s_tp1, s_tp1, 
-		r_tp1, p_tp1)
+# 	a_t = rand(rng, env.ACTIONS)
+# 	s_tp1, r_tp1, _ = step!(env, a_t)
+# 	p_tp1 = predict(horde, s_tp1)
+# 	update!(lu, horde, s_t, s_t, a_t, 
+# 		1/length(env.ACTIONS), s_tp1, s_tp1, 
+# 		r_tp1, p_tp1)
 
-	s_t = copy(s_tp1)
-    end
-    env_size = size(FourRooms())
-    env_feat_size = env_size[1] * env_size[2] 
-    p = [predict(horde, x) for x in 1:env_feat_size]
+# 	s_t = copy(s_tp1)
+#     end
+#     env_size = size(FourRooms())
+#     env_feat_size = env_size[1] * env_size[2] 
+#     p = [predict(horde, x) for x in 1:env_feat_size]
     
-    p
-end
+#     p
+# end
 
 # ╔═╡ a4cb5611-2572-47da-8a74-ad475c0e222e
-function fourrooms_experiment(horde_init::Function, args...; kwargs...)
-    horde = horde_init()
-    p = fourrooms_experiment!(horde, args...; kwargs...)
-    horde, p
-end
+# function fourrooms_experiment(horde_init::Function, args...; kwargs...)
+#     horde = horde_init()
+#     p = fourrooms_experiment!(horde, args...; kwargs...)
+#     horde, p
+# end
 
 
 function fourrooms_behavior!(

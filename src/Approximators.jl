@@ -31,3 +31,19 @@ predict(fa::Linear{<:AbstractMatrix}, x::Int) = begin;
     fa.w[:, x]
 end
 
+
+struct LinearCollection{L<:Linear}
+    funcs::Vector{L}
+end
+
+function LinearCollection(in, out, num_funcs; init=(size...)->zeros(Float32, size...))
+    LinearCollection([Linear(in, out; init=init) for i in 1:num_funcs])
+end
+
+function LinearCollection(in, num_funcs; init=(size...)->zeros(Float32, size...))
+    LinearCollection([Linear(in; init=init) for i in 1:num_funcs])
+end
+
+predict(fa::LinearCollection, args...) = [predict(f, args...) for f in fa.funcs]
+
+

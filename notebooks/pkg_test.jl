@@ -96,28 +96,33 @@ fr_bd_hrd, fr_bd_p = let
 	lu = CompGVFs.TDλ(0.01, 0.9)
 	γ = 0.9
 	env_size = size(CompGVFs.FourRooms())
-	env_feat_size = env_size[1] * env_size[2] 
-	horde, p = CompGVFs.fourrooms_experiment(num_steps, lu) do 
-		[[CompGVFs.GVF(env_feat_size, 
-			CompGVFs.FeatureCumulant(11),
-			fr_bdemon_11, 
-			# ConstantDiscount(γ))
-			CompGVFs.TerminatingDiscount(γ, 11))
+	env_feat_size = env_size[1] * env_size[2]
+	horde = [
+		[CompGVFs.GVF(env_feat_size, 
+		 	CompGVFs.FeatureCumulant(11),
+			 fr_bdemon_11,
+			 CompGVFs.TerminatingDiscount(γ, 11))
 		];
 		[CompGVFs.GVF(env_feat_size, 
-			CompGVFs.RescaleCumulant(
+			 CompGVFs.RescaleCumulant(
 				CompGVFs.PredictionCumulant(i), 
 				γ),
-			fr_bdemon_11, 
-			# ConstantDiscount(γ))
-			CompGVFs.TerminatingDiscount(γ, 11))
-			for i in 1:11]]
-	end
+			 fr_bdemon_11, 
+			 # ConstantDiscount(γ))
+			 CompGVFs.TerminatingDiscount(γ, 11))
+		for i in 1:11]]
+	learner = CompGVFs.VLinearLearner(env_feat_size, horde, lu)
+	horde, p = CompGVFs.fourrooms_experiment!(
+		learner,
+		num_steps)
 	horde, p
 end
 
+# ╔═╡ 91a075ec-5619-44ef-b016-067303142a3a
+fr_bd_hrd
+
 # ╔═╡ d89eec44-5df2-4a46-b9db-8e68adbe6c3e
-fourrooms_heatmap_valuefunction(getindex.(fr_bd_p, 5))
+fourrooms_heatmap_valuefunction(getindex.(fr_bd_p, 10))
 
 # ╔═╡ 206a7861-dca5-433f-b5af-f2c3449f97bc
 let
@@ -1414,6 +1419,7 @@ version = "1.4.1+0"
 # ╠═3dde5483-4e7f-44a2-a21e-801bfbe4b623
 # ╠═84316175-c9ac-491e-ac2f-072e7fc5f93c
 # ╠═9aa92437-6df6-4a95-8810-e295423b20b6
+# ╠═91a075ec-5619-44ef-b016-067303142a3a
 # ╠═d89eec44-5df2-4a46-b9db-8e68adbe6c3e
 # ╠═206a7861-dca5-433f-b5af-f2c3449f97bc
 # ╠═6bd6bbc9-b1f6-4a72-abbb-874bb1c64243
