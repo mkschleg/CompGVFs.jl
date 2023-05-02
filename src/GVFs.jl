@@ -2,31 +2,14 @@
 import MinimalRLCore
 import Random
 
+# Currently the difference between a bdemon and a GVF is trivial. Really
+# a BDemon is a GVF with policy <: learned policy.
+
 struct GVF{C, Π, Γ}
     c::C
-    π::Π
+    π::Π # Say this is epsilon greedy :thinking:
     γ::Γ
 end
-
-# GVF(cumulant, policy, discount) = 
-#     GVF(cumulant, policy, discount)
-
-
-# predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{<:Number}) = 
-#     dot(gvf.w, x)
-
-# predict(gvf::GVF{<:AbstractVector}, x::AbstractVector{Int}) = begin; 
-#     w = gvf.w; 
-#     ret = sum(view(w, x))
-# end
-
-# predict(gvf::GVF{<:AbstractVector}, x::Int) = begin; 
-#     gvf.w[x]
-# end
-
-# predict(gvf::GVF{<:AbstractMatrix}, x::AbstractVector{Int}) = begin; 
-#     gvf.w[x]
-# end
 
 const Horde = Vector{<:GVF}
 # predict(horde::Horde, x) = [predict(gvf, x) for gvf in horde]
@@ -34,7 +17,7 @@ const Horde = Vector{<:GVF}
 
 mutable struct BDemon{C, Π, Γ}
     c::C
-    π::Π
+    π::Π # say this is epsilon greedy...
     γ::Γ
 end
 

@@ -3,7 +3,7 @@
 abstract type AbstractLearner end
 
 
-struct Learner{FT, H, A, LU, FC, S} <: AbstractLearner
+mutable struct Learner{FT, H, A, LU, FC, S} <: AbstractLearner
     horde::H
     answer::A
     update::LU
@@ -76,7 +76,7 @@ function update!(learner::ControlLearner, o_t, a_t, o_tp1, r_tp1)
 
     c = get_value(gvf.c, o_tp1, x_tp1, p_tp1, r_tp1)
     
-    update!(learner.update, bdemon,
+    learner.state = update!(learner.update, bdemon,
             learner.answer, learner.state,
             x_t, x_tp1, a_t, c, γ_t, γ_tp1)
     #o_t, x_t, a_t, nothing, o_tp1, x_tp1, r_tp1, p_tp1)

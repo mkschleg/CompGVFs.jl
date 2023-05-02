@@ -1599,7 +1599,7 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─fe6e9a98-c1e7-11ed-39ed-05ec4ee56c8a
+# ╠═fe6e9a98-c1e7-11ed-39ed-05ec4ee56c8a
 # ╟─7de6473b-4463-4d03-bed9-751b42078a56
 # ╠═66c1a61e-2025-4a70-aabe-2710dee7f0fb
 # ╠═26ca0c30-1f80-401e-9ae0-00b16d999b89
@@ -1620,9 +1620,9 @@ version = "1.4.1+0"
 # ╠═84316175-c9ac-491e-ac2f-072e7fc5f93c
 # ╟─36184e5e-5c1e-4a8c-934f-be2c210293e1
 # ╠═9aa92437-6df6-4a95-8810-e295423b20b6
-# ╟─561cd832-e4fd-4683-98da-665d4f02bb0c
+# ╠═561cd832-e4fd-4683-98da-665d4f02bb0c
 # ╠═d89eec44-5df2-4a46-b9db-8e68adbe6c3e
-# ╟─db1ccaf1-65af-4a5e-852e-8247af73477d
+# ╠═db1ccaf1-65af-4a5e-852e-8247af73477d
 # ╠═206a7861-dca5-433f-b5af-f2c3449f97bc
 # ╟─03e31ea9-ab27-4e09-8dd2-e621c32c8714
 # ╠═6bd6bbc9-b1f6-4a72-abbb-874bb1c64243
@@ -1635,7 +1635,7 @@ version = "1.4.1+0"
 # ╠═cd3b5c29-6a2c-45b2-afc8-1aa59e96f519
 # ╠═0037bb06-d6b5-45ae-84b9-31af35683d25
 # ╠═2bb526c7-576f-421a-bc1c-0580d09dd9e8
-# ╠═a6990b0b-8635-4221-991f-6638e869a224
+# ╟─a6990b0b-8635-4221-991f-6638e869a224
 # ╠═dc5b5f44-5e4a-4eda-9c6d-c378c79e553d
 # ╠═e0f7130b-b26f-49cc-bea1-132afc4eee6d
 # ╠═1092fdbc-8987-451f-a8d0-dcbe48a2f340

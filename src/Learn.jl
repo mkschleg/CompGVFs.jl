@@ -78,19 +78,19 @@ function update!(lu::TDλ,
     λ = lu.λ
     w = answer.w
     z = state.z
-	
+
     δ = c + γ_tp1*predict(answer, x_tp1) - predict(answer, x_t)
     
     z .*= γ_t*λ
-    view(z, x_t) .+= 1
+    z[x_t] .+= 1
     z .*= ρ_t
     w .+= (lu.α * δ) .* z
 
 end
 
 struct Qλ
-	α::Float32
-	λ::Float32
+    α::Float32
+    λ::Float32
 end
 
 
@@ -113,19 +113,20 @@ function update!(lu::Qλ,
     bdemon = gvf
 
     w = answer.w
-    z = state.z
+    _z = state.z
 
-    # @info x_t
     Q_t = predict(answer, x_t)[a_t]
     Q_tp1 = maximum(predict(answer, x_tp1))
 
     δ = c + γ_tp1*Q_tp1 - Q_t
-    
-    z .*= γ_t*λ
-    view(z, a_t, x_t) .+= 1
-    w .+= (lu.α * δ) .* z
 
-    return (λ=z)
+    z_up = Float32(γ_t*λ)
+    _z .*= z_up
+    _z[a_t, x_t] += 1
+
+    w .+= (lu.α * δ) .* _z
+
+    return (z = _z,)
 
 end
 

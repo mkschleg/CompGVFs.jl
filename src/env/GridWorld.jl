@@ -40,6 +40,10 @@ function FourRooms()
     GridWithWalls(BASE_WALLS)
 end
 
+function NoWallsGridWorld(width, height)
+    GridWithWalls(fill(0, height, width))
+end
+
 function NoWallsGridWorld()
     BASE_WALLS = [0 0 0 0 0 0 0 0 0 0 0;
                   0 0 0 0 0 0 0 0 0 0 0;
